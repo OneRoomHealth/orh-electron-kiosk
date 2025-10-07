@@ -2,6 +2,11 @@ const { app, BrowserWindow, globalShortcut, session } = require('electron');
 const path = require('path');
 require('dotenv').config();
 
+// Disable hardware acceleration gestures on Windows tablets (must be before app.ready)
+app.commandLine.appendSwitch('disable-pinch');
+app.commandLine.appendSwitch('disable-touch-drag-drop');
+app.commandLine.appendSwitch('disable-touch-editing');
+
 let mainWindow;
 
 // Production URL from environment or default
@@ -14,10 +19,11 @@ function createWindow() {
     frame: false,                  // No window frame
     alwaysOnTop: true,             // Always on top
     skipTaskbar: false,            // Show in taskbar for admin access
-    minimizable: false,            // Prevent minimization
-    closable: false,               // Prevent closing via system buttons
-    movable: false,                // Prevent moving
-    resizable: false,              // Prevent resizing
+    minimizable: false,            // Disable minimize
+    maximizable: false,            // Disable maximize
+    closable: false,               // Disable close button
+    resizable: false,              // Disable resize
+    movable: false,                // Disable moving window
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -26,31 +32,18 @@ function createWindow() {
       partition: 'persist:orh-session',  // Persistent session for OAuth
       webSecurity: true,
       allowRunningInsecureContent: false,
-      backgroundThrottling: false,  // Prevent throttling when not focused
-      enablePreferredSizeMode: true,
-      spellcheck: false,            // Disable spellcheck for performance
     },
   });
 
-  // Configure session for persistent login and performance
+  // Configure session for persistent login
   const ses = session.fromPartition('persist:orh-session');
   
   // Enable session persistence
   ses.setUserAgent(ses.getUserAgent() + ' ORHKiosk/1.0');
   
-  // Performance optimizations
-  ses.setPreloads([path.join(__dirname, 'preload.js')]);
-  
-  // Enable cache for faster loading
-  ses.setCache({
-    size: 100 * 1024 * 1024, // 100MB cache
-  });
-  
   // Load production URL
   console.log('Loading production URL:', PROD_URL);
-  mainWindow.loadURL(PROD_URL, {
-    userAgent: ses.getUserAgent(),
-  });
+  mainWindow.loadURL(PROD_URL);
 
   // Handle navigation to keep user in the app
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -84,36 +77,31 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Prevent closing via web page
+  // Prevent closing via web page or gestures
   mainWindow.on('close', (event) => {
     // Allow closing only via our keyboard shortcut
     if (!app.isQuitting) {
       event.preventDefault();
+      console.log('Close attempt blocked - use Ctrl+Alt+X to exit');
+      // Force window to stay visible and focused
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.setAlwaysOnTop(true);
     }
   });
 
-  // Prevent minimization from Windows gestures
+  // Prevent minimize via gestures
   mainWindow.on('minimize', (event) => {
     event.preventDefault();
+    console.log('Minimize attempt blocked');
     mainWindow.restore();
     mainWindow.focus();
-    mainWindow.setAlwaysOnTop(true);
   });
 
-  // Prevent blur events (loss of focus)
-  mainWindow.on('blur', () => {
-    setTimeout(() => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.focus();
-        mainWindow.moveTop();
-      }
-    }, 100);
-  });
-
-  // Re-apply kiosk mode if somehow exited
-  mainWindow.on('leave-full-screen', () => {
+  // Ensure window stays maximized and kiosk
+  mainWindow.on('restore', () => {
     mainWindow.setKiosk(true);
-    mainWindow.setFullScreen(true);
+    mainWindow.focus();
   });
 
   mainWindow.on('closed', () => {
@@ -146,31 +134,36 @@ function registerExitShortcut() {
   }
 }
 
-// Performance: Disable hardware acceleration issues
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-
 // This method will be called when Electron has finished initialization
 app.whenReady().then(() => {
-  // Optimize for performance
-  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
-  
   createWindow();
   registerExitShortcut();
   
-  // Periodically ensure window stays on top and focused
-  setInterval(() => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      if (!mainWindow.isFocused()) {
-        mainWindow.focus();
-        mainWindow.moveTop();
-      }
-      if (!mainWindow.isAlwaysOnTop()) {
-        mainWindow.setAlwaysOnTop(true);
-      }
-    }
-  }, 2000);
+  // Block Windows key combinations that might exit kiosk
+  globalShortcut.register('Alt+F4', () => {
+    console.log('Alt+F4 blocked');
+    return false;
+  });
+  globalShortcut.register('Alt+Tab', () => {
+    console.log('Alt+Tab blocked');
+    return false;
+  });
+  globalShortcut.register('Control+Alt+Delete', () => {
+    console.log('Ctrl+Alt+Del blocked');
+    return false;
+  });
+  globalShortcut.register('Control+Shift+Escape', () => {
+    console.log('Task Manager shortcut blocked');
+    return false;
+  });
+  globalShortcut.register('Command+Q', () => {
+    console.log('Command+Q blocked');
+    return false;
+  });
+  globalShortcut.register('Command+W', () => {
+    console.log('Command+W blocked');
+    return false;
+  });
 
   app.on('activate', () => {
     // On macOS it's common to re-create a window in the app when the
@@ -200,35 +193,20 @@ process.on('uncaughtException', (error) => {
   // In production, you might want to log this to a file or remote service
 });
 
-// Prevent app from being suspended or minimized
+// Prevent app from being suspended or losing focus
 app.on('browser-window-blur', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    setTimeout(() => {
-      mainWindow.focus();
-      mainWindow.moveTop();
-      mainWindow.setAlwaysOnTop(true);
-    }, 50);
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(true);
   }
 });
 
-// Prevent Windows gestures from minimizing the app
-if (process.platform === 'win32') {
-  app.on('browser-window-created', (event, window) => {
-    window.hookWindowMessage(0x0112, (wParam) => {
-      // SC_MINIMIZE = 0xF020, SC_CLOSE = 0xF060
-      const SC_MINIMIZE = 0xF020;
-      const SC_CLOSE = 0xF060;
-      const SC_RESTORE = 0xF120;
-      
-      if (wParam === SC_MINIMIZE || wParam === SC_CLOSE || wParam === SC_RESTORE) {
-        window.setSkipTaskbar(false);
-        window.focus();
-        window.moveTop();
-        return true; // Prevent default behavior
-      }
-    });
-  });
-}
+// Aggressively keep focus on tablets
+setInterval(() => {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
+    mainWindow.focus();
+  }
+}, 1000);
 
 // Security: Disable dangerous features
 app.on('web-contents-created', (event, contents) => {
