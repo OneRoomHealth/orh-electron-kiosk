@@ -2,6 +2,10 @@ const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const isDev = process.env.NODE_ENV === 'development';
 
+// Performance optimizations
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+
 let mainWindow;
 
 function createWindow() {
@@ -15,6 +19,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      backgroundThrottling: false,
+      spellcheck: false,
     },
     icon: path.join(__dirname, '../dist/assets/orh_favicon_32x32-Byi2AACc.png'),
   });
