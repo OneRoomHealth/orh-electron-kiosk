@@ -1,202 +1,267 @@
-# OneRoom Health - Electron Kiosk Application
+# OneRoom Health Electron Kiosk
 
-This is a secure, fullscreen kiosk application for OneRoom Health workstations and tablets.
+Enterprise-grade kiosk application for OneRoom Health clinical operations, built with Electron for Windows tablets and desktop deployment.
+
+## Overview
+
+This Electron application runs in full kiosk mode, loading the OneRoom Health web application in a secure, locked-down environment. It's specifically designed for Surface tablets and healthcare kiosks running Windows 11 Pro.
 
 ## Features
 
-- 🔒 **Fullscreen Kiosk Mode** - Runs in fullscreen without window controls
-- 🔐 **Microsoft OAuth Integration** - Secure authentication with Azure AD
-- 💾 **Persistent Sessions** - Automatic login when credentials are stored
-- ⌨️ **Admin Exit Shortcut** - Press `Ctrl+Alt+X` to exit the application
-- 🚀 **Auto-Start on Boot** - Automatically launches when the device starts
-- 🌐 **Production Ready** - Points directly to production environment
+- **True Kiosk Mode**: Fullscreen, frameless window that prevents exit via gestures or standard shortcuts
+- **Touch Gesture Protection**: Disables swipe-up and other tablet gestures that could exit the app
+- **Persistent Sessions**: Maintains OAuth login sessions across app restarts
+- **Auto-start on Boot**: Automatically launches when Windows starts (configurable during installation)
+- **Secure Navigation**: Restricts navigation to approved domains only
+- **OAuth Support**: Handles Microsoft Azure AD authentication popups
+- **Admin Exit**: Secure exit via `Ctrl+Alt+X` keyboard shortcut only
 
 ## Prerequisites
 
-- Windows 10/11, macOS 10.13+, or modern Linux
-- Node.js 16+ and npm
+- Node.js 20.x or higher
+- Windows 11 Pro (recommended for kiosk deployments)
+- Git (for cloning the repository)
 
 ## Installation
 
-### 1. Clone and Install Dependencies
+### Clone the Repository
 
 ```bash
+git clone <repository-url>
 cd orh-electron-kiosk
+```
+
+### Install Dependencies
+
+```bash
 npm install
 ```
 
-### 2. Configure Environment Variables (Optional)
+### Configure Environment
 
-Copy the example environment file:
+Create a `.env` file in the root directory:
 
 ```bash
-cp .env.example .env
-```
+# Production URL
+PROD_URL=https://orh-frontend-container-prod.purplewave-6482a85c.westus2.azurecontainerapps.io/login
 
-The default configuration will work out of the box. You can customize the `.env` file if needed:
-
-```env
-KIOSK_URL=https://orh-frontend-container-prod.purplewave-6482a85c.westus2.azurecontainerapps.io/login
+# Environment
 NODE_ENV=production
 ```
 
-**Note:** Microsoft OAuth authentication is handled by the web application itself. The Electron kiosk is just a browser wrapper - no Azure credentials needed here.
+You can also use `KIOSK_URL` instead of `PROD_URL` if you want to override the URL specifically for kiosk mode.
 
-### 3. Run the Application
+## Development
+
+To run the application in development mode:
 
 ```bash
 npm start
 ```
 
-## Building for Production
+This will launch the kiosk in fullscreen mode and load the configured production URL.
 
-### Windows
+## Building the Installer
+
+### Build Windows Installer (.exe)
 
 ```bash
 npm run build:win
 ```
 
-Output: `release/OneRoom Health Kiosk Setup.exe`
+This creates an NSIS installer in the `release/` directory. The installer includes:
+- Auto-start configuration option
+- Desktop shortcut creation
+- Start menu entry
+- Clean uninstall support
 
-### macOS
+### Build for Other Platforms
 
 ```bash
+# macOS
 npm run build:mac
-```
 
-Output: `release/OneRoom Health Kiosk.dmg`
-
-### Linux
-
-```bash
+# Linux
 npm run build:linux
 ```
 
-Output: `release/OneRoom Health Kiosk.AppImage`
+## Deployment
 
-## Setting Up Auto-Start
+### Manual Installation
 
-### Windows
+1. Run the `.exe` installer from the `release/` directory
+2. Follow the installation wizard
+3. Choose whether to enable auto-start on Windows boot
+4. The application will launch automatically after installation
 
-After building, the installer will offer to create a startup shortcut. Alternatively:
+### GitHub Actions Release
 
-1. Press `Win + R`, type `shell:startup`, press Enter
-2. Create a shortcut to the installed application in this folder
+This project includes automated GitHub Actions workflow for releases:
 
-**Or via Registry (recommended for kiosk):**
-
-Create a file `setup-autostart.reg`:
-
-```reg
-Windows Registry Editor Version 5.00
-
-[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run]
-"ORHKiosk"="C:\\Program Files\\OneRoom Health Kiosk\\OneRoom Health Kiosk.exe"
-```
-
-Double-click to apply.
-
-### macOS
-
-1. System Preferences → Users & Groups
-2. Click your user → Login Items
-3. Click the "+" button
-4. Navigate to Applications and select "OneRoom Health Kiosk"
-
-### Linux (Ubuntu/Debian)
-
-Create a desktop entry:
-
+1. **Commit your changes** to the main branch
+2. **Create and push a version tag**:
 ```bash
-mkdir -p ~/.config/autostart
-cat > ~/.config/autostart/orh-kiosk.desktop << EOF
-[Desktop Entry]
-Type=Application
-Name=OneRoom Health Kiosk
-Exec=/path/to/OneRoom Health Kiosk.AppImage
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-EOF
-```
+   git tag v1.0.3
+   git push origin main
+   git push origin v1.0.3
+   ```
+3. **GitHub Actions will automatically**:
+   - Build the Windows installer
+   - Create a GitHub release
+   - Attach the `.exe` file to the release
 
-## Kiosk Mode Features
+The workflow is defined in `.github/workflows/release-win.yml`.
 
-### Exit the Application
+## Configuration Files
 
-Press `Ctrl + Alt + X` to close the kiosk application.
+### Main Kiosk File
+- **`electron/main-kiosk.js`**: Production kiosk mode (current entry point)
+- **`electron/main.js`**: Development mode with DevTools
 
-This shortcut is designed for administrators and should be kept confidential.
+### Key Configuration Files
+- **`package.json`**: Application metadata and build scripts
+- **`electron-builder.yml`**: Build configuration for installers
+- **`electron/installer.nsh`**: Custom NSIS installer scripts
+- **`electron/preload.js`**: Secure preload script for renderer process
+- **`electron/autostart.js`**: Utility for managing Windows auto-start
 
-### Session Persistence
+## Usage
 
-The application automatically stores authentication tokens in the browser session. When the application restarts:
+### Starting the Kiosk
 
-- If valid credentials exist → Auto-login
-- If credentials expired → Show login page
+The application will start automatically if configured during installation. You can also launch it from:
+- Desktop shortcut
+- Start menu: "OneRoom Health Kiosk"
+- Task Manager → Run new task → "OneRoom Health Kiosk"
 
-Session data is stored securely in: `%APPDATA%/orh-electron-kiosk/` (Windows) or `~/Library/Application Support/orh-electron-kiosk/` (macOS)
+### Exiting the Kiosk
 
-### Security Features
+**For Administrators Only:**
 
-- ✅ Context isolation enabled
-- ✅ Sandbox mode active
-- ✅ Node integration disabled
-- ✅ Secure preload script for controlled access
-- ✅ Session data encrypted at rest
+Press `Ctrl+Alt+X` simultaneously to exit the kiosk application.
+
+**Note**: This is the ONLY way to exit the application. All other exit methods (Alt+F4, closing window, swipe gestures, etc.) are disabled for security.
+
+### Blocked Shortcuts
+
+The following shortcuts are blocked to prevent accidental exit:
+- `Alt+F4` - Close window
+- `Ctrl+Shift+Escape` - Task Manager
+- `F11` - Exit fullscreen
+- `Command+Q` / `Command+W` - macOS quit/close
+
+**Note**: `Alt+Tab` and `Ctrl+Alt+Delete` cannot be blocked as they are system-level Windows shortcuts.
+
+## Kiosk Security Features
+
+### Window Protection
+- Non-resizable, non-movable, frameless window
+- Always on top, cannot be minimized
+- Blocks close attempts and restores focus
+- Prevents minimize via swipe gestures
+
+### Touch Gesture Protection
+- Disables pinch-to-zoom
+- Disables touch drag-and-drop
+- Disables touch editing gestures
+- Aggressive focus retention (checks every 1 second)
+
+### Navigation Security
+- Restricts navigation to approved domains:
+  - `purplewave-6482a85c.westus2.azurecontainerapps.io`
+  - `login.microsoftonline.com`
+  - `microsoft.com`
+- Blocks popup windows except for OAuth authentication
+- Disables right-click context menu
 
 ## Troubleshooting
 
-### Application won't start
+### Kiosk Won't Exit
 
-1. Check that all dependencies are installed: `npm install`
-2. Verify `.env` file exists and contains valid values
-3. Check logs in Developer Tools (if accessible)
+If `Ctrl+Alt+X` doesn't work:
+1. Try `Ctrl+Alt+Delete` → Task Manager → End Task on "OneRoom Health Kiosk"
+2. If Task Manager is blocked, restart the computer
+3. Disable auto-start before restarting (see below)
 
-### Authentication fails
+### Disable Auto-Start
 
-1. Verify Azure AD credentials in `.env`
-2. Ensure redirect URI matches Azure AD configuration
-3. Check that the production URL is accessible from your network
-4. Clear session data: Delete `session-data/` folder in app data directory
+If the kiosk auto-starts and you need to disable it:
+1. Press `Ctrl+Alt+Delete` to access Task Manager
+2. Go to "Startup" tab
+3. Find "OneRoom Health Kiosk" and disable it
+4. Restart the computer
 
-### Can't exit the application
+### Application Crashes on Start
 
-Press `Ctrl + Alt + X`
+Check the application logs:
+- Windows: `%APPDATA%\orh-electron-kiosk\logs\`
+- macOS: `~/Library/Logs/orh-electron-kiosk/`
 
-If this doesn't work:
-- Windows: `Ctrl + Shift + Esc` to open Task Manager, end the process
-- macOS: `Cmd + Option + Esc`, force quit
-- Linux: `Alt + F2`, type `xkill`, click the window
+### OAuth Login Issues
 
-### Auto-start not working
+If login fails or doesn't persist:
+1. Clear the application session data:
+   - Windows: Delete `%APPDATA%\orh-electron-kiosk\`
+2. Restart the application
+3. Complete the OAuth flow again
 
-**Windows:**
-- Check `shell:startup` folder for the shortcut
-- Verify the target path is correct
-- Check Windows Task Manager → Startup tab
+### Build Errors
 
-**macOS:**
-- System Preferences → Users & Groups → Login Items
-- Ensure the app is in the list and checked
+If `npm run build:win` fails:
+- Ensure Node.js 20.x is installed
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Check that you have the latest version of electron-builder
 
-**Linux:**
-- Check `~/.config/autostart/orh-kiosk.desktop` exists
-- Verify the Exec path is correct
-- Test manually: `~/.config/autostart/orh-kiosk.desktop`
+## Project Structure
 
-## Development
+```
+orh-electron-kiosk/
+├── electron/                    # Electron main process files
+│   ├── main-kiosk.js           # Production kiosk entry point
+│   ├── main.js                 # Development entry point
+│   ├── preload.js              # Secure preload script
+│   ├── autostart.js            # Windows auto-start utility
+│   ├── credentials.js          # (Optional) Credential management
+│   ├── installer.nsh           # NSIS installer customization
+│   ├── icon.ico                # Windows application icon
+│   ├── icon.png                # Linux application icon
+│   └── entitlements.mac.plist  # macOS entitlements
+├── .github/workflows/          # GitHub Actions workflows
+│   └── release-win.yml         # Windows release automation
+├── release/                    # Build output directory
+├── .env                        # Environment configuration (not in git)
+├── .env.example                # Environment template
+├── package.json                # NPM package configuration
+├── electron-builder.yml        # Electron builder configuration
+└── README.md                   # This file
+```
 
-The main application files:
+## Environment Variables
 
-- `electron/main.js` - Main process (window management, kiosk mode)
-- `electron/preload.js` - Secure bridge between main and renderer
-- `package.json` - Dependencies and build configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROD_URL` or `KIOSK_URL` | URL to load in kiosk mode | Azure Container Apps URL |
+| `NODE_ENV` | Environment mode | `production` |
+
+## Version History
+
+### v1.0.3 (Current)
+- Enhanced tablet swipe gesture protection
+- Added minimize prevention
+- Improved focus retention
+- Fixed exit shortcut conflicts
+- Removed unblocka ble system shortcuts
+
+### v1.0.0
+- Initial production release
+- Basic kiosk mode functionality
+- OAuth support
+- Auto-start capability
 
 ## Support
 
-For issues or questions, contact OneRoom Health IT support.
+For issues, bugs, or feature requests, contact the OneRoom Health IT team.
 
 ## License
 
-Proprietary - OneRoom Health
+Proprietary - OneRoom Health © 2025

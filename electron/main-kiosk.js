@@ -140,29 +140,21 @@ app.whenReady().then(() => {
   registerExitShortcut();
   
   // Block Windows key combinations that might exit kiosk
+  // Note: Alt+Tab and Ctrl+Alt+Delete are system-level and cannot be blocked
   globalShortcut.register('Alt+F4', () => {
     console.log('Alt+F4 blocked');
-    return false;
-  });
-  globalShortcut.register('Alt+Tab', () => {
-    console.log('Alt+Tab blocked');
-    return false;
-  });
-  globalShortcut.register('Control+Alt+Delete', () => {
-    console.log('Ctrl+Alt+Del blocked');
-    return false;
   });
   globalShortcut.register('Control+Shift+Escape', () => {
     console.log('Task Manager shortcut blocked');
-    return false;
   });
   globalShortcut.register('Command+Q', () => {
     console.log('Command+Q blocked');
-    return false;
   });
   globalShortcut.register('Command+W', () => {
     console.log('Command+W blocked');
-    return false;
+  });
+  globalShortcut.register('F11', () => {
+    console.log('F11 (exit fullscreen) blocked');
   });
 
   app.on('activate', () => {
