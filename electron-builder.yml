@@ -1,0 +1,82 @@
+appId: com.oneroomhealth.kiosk
+productName: OneRoom Health Kiosk
+copyright: Copyright © 2025 OneRoom Health
+
+directories:
+  output: release
+  buildResources: electron
+
+files:
+  - electron/**/*
+  - package.json
+  - .env
+  - "!**/.git"
+  - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
+
+# Windows Configuration
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron/icon.ico
+  # Disable code signing for internal kiosk deployment
+  signingHashAlgorithms:
+    - sha256
+  sign: null
+  
+nsis:
+  oneClick: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  installerIcon: electron/icon.ico
+  uninstallerIcon: electron/icon.ico
+  perMachine: false
+  # This creates a registry entry for auto-start
+  include: electron/installer.nsh
+
+# macOS Configuration  
+mac:
+  target:
+    - dmg
+    - zip
+  icon: electron/icon.icns
+  category: public.app-category.healthcare-fitness
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Linux Configuration
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: electron/icon.png
+  category: Office
+  desktop:
+    StartupNotify: "true"
+    
+deb:
+  depends:
+    - gconf2
+    - gconf-service
+    - libnotify4
+    - libappindicator1
+    - libxtst6
+    - libnss3
+    
+appImage:
+  license: PROPRIETARY
