@@ -11,14 +11,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install deps
+      
+      - name: Install dependencies
         run: npm ci
-      - name: Build web (React)
-        run: npm run build
-      - name: Package & Publish (electron-builder)
+      
+      - name: Build Windows installer
+        run: npm run build:win
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: npm run publish:win
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-installer
+          path: release/*.exe
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: release/*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

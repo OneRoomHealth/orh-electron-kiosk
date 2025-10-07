@@ -36,7 +36,12 @@
       "package.json"
     ],
     "win": {
-      "target": ["zip"],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
       "icon": "electron/icon.ico"
     },
     "nsis": {
