@@ -1,8 +1,8 @@
 ; Custom NSIS script for auto-start configuration
 
 !macro customInstall
-  ; Add registry entry for auto-start (current user)
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ORHKiosk" "$INSTDIR\${PRODUCT_FILENAME}.exe"
+  ; Add registry entry for auto-start with proper quoting
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ORHKiosk" '"$INSTDIR\OneRoom Health Kiosk.exe"'
 !macroend
 
 !macro customUnInstall  
