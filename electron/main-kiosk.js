@@ -14,6 +14,13 @@ function createWindow() {
     frame: false,                  // No window frame
     alwaysOnTop: true,             // Always on top
     skipTaskbar: false,            // Show in taskbar for admin access
+    resizable: false,              // Prevent resizing
+    movable: false,                // Prevent moving
+    minimizable: false,            // Prevent minimizing
+    maximizable: false,            // Prevent maximizing
+    closable: false,               // Prevent closing
+    show: false,                   // Don't show until ready (prevents white flash)
+    backgroundColor: '#ffffff',    // Set background color to match app
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -22,18 +29,172 @@ function createWindow() {
       partition: 'persist:orh-session',  // Persistent session for OAuth
       webSecurity: true,
       allowRunningInsecureContent: false,
+      // Performance optimizations
+      enablePreferredSizeMode: false,
+      offscreen: false,
+      backgroundThrottling: false,  // Prevent throttling when not focused
     },
   });
 
-  // Configure session for persistent login
+  // Configure session for persistent login and performance
   const ses = session.fromPartition('persist:orh-session');
   
   // Enable session persistence
   ses.setUserAgent(ses.getUserAgent() + ' ORHKiosk/1.0');
   
+  // Performance optimizations: Enable cache and preloading
+  ses.setPreloads([path.join(__dirname, 'preload.js')]);
+  
+  // Set cache size (100MB for better performance)
+  ses.setCache({
+    maxSize: 104857600, // 100MB in bytes
+  });
+  
+  // Prevent touch gestures from affecting the window
+  mainWindow.setIgnoreMouseEvents(false);
+  
+  // Intercept all pointer events to prevent Windows touch gestures
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    // Block Windows key combinations that could exit the app
+    if (input.key === 'Meta' || input.key === 'Super') {
+      event.preventDefault();
+    }
+    // Block Alt+Tab, Alt+F4, etc.
+    if (input.alt && (input.key === 'Tab' || input.key === 'F4')) {
+      event.preventDefault();
+    }
+    // Block Ctrl+W, Ctrl+Q (close window shortcuts)
+    if (input.control && (input.key === 'w' || input.key === 'q')) {
+      event.preventDefault();
+    }
+  });
+  
+  // Prevent minimize/close via touch gestures
+  mainWindow.on('minimize', (event) => {
+    event.preventDefault();
+    mainWindow.restore();
+    mainWindow.focus();
+  });
+  
+  mainWindow.on('hide', (event) => {
+    event.preventDefault();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  
+  // Force window to stay fullscreen and on top
+  mainWindow.on('blur', () => {
+    mainWindow.focus();
+    mainWindow.moveTop();
+  });
+  
+  mainWindow.on('leave-full-screen', (event) => {
+    event.preventDefault();
+    mainWindow.setFullScreen(true);
+    mainWindow.setKiosk(true);
+  });
+  
   // Load production URL
   console.log('Loading production URL:', PROD_URL);
   mainWindow.loadURL(PROD_URL);
+  
+  // Performance: Show window only when ready to prevent flicker
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  
+  // Inject CSS to prevent touch gestures and improve performance
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.insertCSS(`
+      * {
+        -ms-touch-action: none !important;
+        touch-action: none !important;
+        -webkit-touch-callout: none !important;
+        -webkit-user-select: none !important;
+        user-select: none !important;
+        overscroll-behavior: none !important;
+        -ms-scroll-chaining: none !important;
+      }
+      
+      /* Allow text selection and touch for input elements */
+      input, textarea, [contenteditable="true"] {
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        -ms-touch-action: manipulation !important;
+        touch-action: manipulation !important;
+      }
+      
+      /* Optimize rendering */
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      
+      /* Hardware acceleration for animations */
+      * {
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+      }
+    `);
+    
+    // Inject JavaScript to prevent touch gestures
+    mainWindow.webContents.executeJavaScript(`
+      // Prevent all default touch behaviors
+      document.addEventListener('touchstart', function(e) {
+        if (e.touches.length > 1) {
+          e.preventDefault(); // Prevent pinch zoom
+        }
+      }, { passive: false });
+      
+      document.addEventListener('touchmove', function(e) {
+        if (e.touches.length > 1) {
+          e.preventDefault(); // Prevent pinch zoom
+        }
+      }, { passive: false });
+      
+      document.addEventListener('touchend', function(e) {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // Prevent double-tap zoom
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', function(e) {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, false);
+      
+      // Prevent edge swipe gestures on Windows
+      document.addEventListener('MSGestureChange', function(e) {
+        e.preventDefault();
+      }, false);
+      
+      document.addEventListener('MSGestureStart', function(e) {
+        e.preventDefault();
+      }, false);
+      
+      document.addEventListener('MSGestureEnd', function(e) {
+        e.preventDefault();
+      }, false);
+      
+      // Log performance metrics
+      if (window.performance && window.performance.timing) {
+        window.addEventListener('load', function() {
+          const perfData = window.performance.timing;
+          const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
+          console.log('Page Load Time: ' + pageLoadTime + 'ms');
+        });
+      }
+    `);
+  });
 
   // Handle navigation to keep user in the app
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -105,8 +266,36 @@ function registerExitShortcut() {
   }
 }
 
+// Performance: Enable hardware acceleration
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+app.commandLine.appendSwitch('enable-zero-copy');
+
+// Security: Disable hardware acceleration in sandboxed renderers
+// (balance between security and performance)
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
+// Performance: Disk cache
+app.commandLine.appendSwitch('disk-cache-size', '104857600'); // 100MB
+
 // This method will be called when Electron has finished initialization
 app.whenReady().then(() => {
+  // Enable hardware acceleration
+  if (!app.isReady()) {
+    return;
+  }
+  
+  // Performance: Pre-warm the DNS cache for the production URL
+  const { net } = require('electron');
+  const urlObj = new URL(PROD_URL);
+  net.resolveHost(urlObj.hostname).then((result) => {
+    console.log('DNS pre-warmed:', result);
+  }).catch((err) => {
+    console.log('DNS pre-warm failed:', err);
+  });
+  
   createWindow();
   registerExitShortcut();
 
