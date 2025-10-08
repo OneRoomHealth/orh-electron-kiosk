@@ -9,12 +9,15 @@ This Electron application runs in full kiosk mode, loading the OneRoom Health we
 ## Features
 
 - **True Kiosk Mode**: Fullscreen, frameless window that prevents exit via gestures or standard shortcuts
-- **Touch Gesture Protection**: Disables swipe-up and other tablet gestures that could exit the app
+- **Complete Touch Gesture Protection**: Blocks ALL edge swipes, pinch, drag, and tablet gestures
+- **Immediate Launch**: Windows 11 Pro Assigned Access support for instant app launch (bypasses desktop)
 - **Persistent Sessions**: Maintains OAuth login sessions across app restarts
-- **Auto-start on Boot**: Automatically launches when Windows starts (configurable during installation)
+- **Auto-start on Boot**: Automatically launches when Windows starts with high priority
 - **Secure Navigation**: Restricts navigation to approved domains only
 - **OAuth Support**: Handles Microsoft Azure AD authentication popups
-- **Admin Exit**: Secure exit via `Ctrl+Alt+X` keyboard shortcut only
+- **Dual Exit Methods**: 
+  - `Ctrl+Alt+X` keyboard shortcut
+  - 5-tap sequence in top-right corner (for tablets)
 
 ## Prerequisites
 
@@ -87,12 +90,38 @@ npm run build:linux
 
 ## Deployment
 
-### Manual Installation
+### Standard Installation
 
 1. Run the `.exe` installer from the `release/` directory
 2. Follow the installation wizard
 3. Choose whether to enable auto-start on Windows boot
 4. The application will launch automatically after installation
+
+### Windows 11 Pro - Full Kiosk Mode (Recommended)
+
+For immediate launch (bypassing Windows desktop) on Windows 11 Pro/Enterprise:
+
+1. Install the application using the standard installer
+2. **Right-click PowerShell** and select **"Run as Administrator"**
+3. Navigate to the installation directory:
+   ```powershell
+   cd "$env:LOCALAPPDATA\Programs\OneRoom Health Kiosk\resources\app\electron"
+   ```
+4. Run the configuration script:
+   ```powershell
+   .\setup-kiosk-mode.ps1
+   ```
+5. Follow the prompts and restart when complete
+
+This configures:
+- Windows Assigned Access (single-app kiosk mode)
+- Immediate launch on login (no desktop shown)
+- Disabled edge swipes and lock screen
+- Optimized power settings
+- High-priority startup
+
+**To Remove Kiosk Mode:**
+Run `.\setup-kiosk-mode-remove.ps1` as Administrator and restart.
 
 ### GitHub Actions Release
 
@@ -136,11 +165,14 @@ The application will start automatically if configured during installation. You 
 
 ### Exiting the Kiosk
 
-**For Administrators Only:**
+**For Administrators - Two Methods:**
 
-Press `Ctrl+Alt+X` simultaneously to exit the kiosk application.
+1. **Keyboard Shortcut**: Press `Ctrl+Alt+X` simultaneously
+2. **Touch Gesture (Tablet)**: Tap the top-right corner 5 times within 3 seconds
+   - Visual feedback: A red circle appears showing tap count
+   - Must complete all 5 taps in the corner within 3 seconds
 
-**Note**: This is the ONLY way to exit the application. All other exit methods (Alt+F4, closing window, swipe gestures, etc.) are disabled for security.
+**Note**: These are the ONLY ways to exit the application. All other exit methods (Alt+F4, closing window, swipe gestures, etc.) are completely disabled for security.
 
 ### Blocked Shortcuts
 
@@ -161,10 +193,13 @@ The following shortcuts are blocked to prevent accidental exit:
 - Prevents minimize via swipe gestures
 
 ### Touch Gesture Protection
-- Disables pinch-to-zoom
-- Disables touch drag-and-drop
-- Disables touch editing gestures
+- Completely blocks ALL edge swipes (left, right, top, bottom)
+- Disables pinch-to-zoom and smooth scrolling
+- Disables touch drag-and-drop and touch editing
+- Prevents overscroll navigation gestures
+- Blocks tablet mode gesture transitions
 - Aggressive focus retention (checks every 1 second)
+- CSS-level touch-action blocking for bulletproof protection
 
 ### Navigation Security
 - Restricts navigation to approved domains:
@@ -216,16 +251,18 @@ If `npm run build:win` fails:
 
 ```
 orh-electron-kiosk/
-├── electron/                    # Electron main process files
-│   ├── main-kiosk.js           # Production kiosk entry point
-│   ├── main.js                 # Development entry point
-│   ├── preload.js              # Secure preload script
-│   ├── autostart.js            # Windows auto-start utility
-│   ├── credentials.js          # (Optional) Credential management
-│   ├── installer.nsh           # NSIS installer customization
-│   ├── icon.ico                # Windows application icon
-│   ├── icon.png                # Linux application icon
-│   └── entitlements.mac.plist  # macOS entitlements
+├── electron/                         # Electron main process files
+│   ├── main-kiosk.js                # Production kiosk entry point
+│   ├── main.js                      # Development entry point
+│   ├── preload.js                   # Secure preload script
+│   ├── autostart.js                 # Windows auto-start utility
+│   ├── setup-kiosk-mode.ps1         # Windows 11 Pro kiosk setup
+│   ├── setup-kiosk-mode-remove.ps1  # Remove kiosk configuration
+│   ├── credentials.js               # (Optional) Credential management
+│   ├── installer.nsh                # NSIS installer customization
+│   ├── icon.ico                     # Windows application icon
+│   ├── icon.png                     # Linux application icon
+│   └── entitlements.mac.plist       # macOS entitlements
 ├── .github/workflows/          # GitHub Actions workflows
 │   └── release-win.yml         # Windows release automation
 ├── release/                    # Build output directory
@@ -245,12 +282,28 @@ orh-electron-kiosk/
 
 ## Version History
 
-### v1.0.3 (Current)
+### v1.0.6 (Current)
+- **Complete gesture blocking**: Bulletproof protection against ALL touch navigation
+- **5-tap corner exit**: Touch-friendly exit method for tablets with visual feedback
+- **Windows 11 Pro Assigned Access**: Immediate launch configuration (bypasses desktop)
+- **PowerShell utilities**: Automated setup/removal scripts for full kiosk mode
+- **Enhanced startup priority**: Task Scheduler integration for reliable boot
+
+### v1.0.5
+- Fixed exit shortcut to use Control+Alt+X directly
+- Improved startup priority with Windows Task Scheduler
+- Better auto-launch reliability
+
+### v1.0.4
+- Added auto-launch dependency
+- Fixed auto-start functionality
+- Integrated autostart module into main process
+
+### v1.0.3
 - Enhanced tablet swipe gesture protection
 - Added minimize prevention
 - Improved focus retention
 - Fixed exit shortcut conflicts
-- Removed unblocka ble system shortcuts
 
 ### v1.0.0
 - Initial production release

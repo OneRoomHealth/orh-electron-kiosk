@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, session } = require('electron');
+const { app, BrowserWindow, globalShortcut, session, ipcMain } = require('electron');
 const path = require('path');
 const autostart = require('./autostart');
 require('dotenv').config();
@@ -7,11 +7,21 @@ require('dotenv').config();
 app.commandLine.appendSwitch('disable-pinch');
 app.commandLine.appendSwitch('disable-touch-drag-drop');
 app.commandLine.appendSwitch('disable-touch-editing');
+app.commandLine.appendSwitch('disable-touch-feedback');
+app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+app.commandLine.appendSwitch('disable-smooth-scrolling');
+app.commandLine.appendSwitch('overscroll-history-navigation', '0');
 
 let mainWindow;
 
 // Production URL from environment or default
 const PROD_URL = process.env.KIOSK_URL || process.env.PROD_URL || 'https://orh-frontend-container-prod.purplewave-6482a85c.westus2.azurecontainerapps.io/login';
+
+// 5-tap corner exit control
+let cornerTaps = [];
+const CORNER_SIZE = 100; // pixels
+const TAP_TIMEOUT = 3000; // 3 seconds
+const REQUIRED_TAPS = 5;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -118,6 +128,171 @@ function createWindow() {
   mainWindow.webContents.on('console-message', (event, level, message) => {
     console.log(`Renderer [${level}]:`, message);
   });
+
+  // Inject CSS to disable all touch gestures and scrolling
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.insertCSS(`
+      * {
+        -ms-touch-action: none !important;
+        touch-action: none !important;
+        -ms-content-zooming: none !important;
+        -ms-user-select: none !important;
+        user-select: none !important;
+        overscroll-behavior: none !important;
+        -webkit-user-drag: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      
+      html, body {
+        overflow: hidden !important;
+        position: fixed !important;
+        width: 100% !important;
+        height: 100% !important;
+        -webkit-overflow-scrolling: none !important;
+      }
+    `);
+
+    // Inject JavaScript to handle 5-tap corner exit
+    mainWindow.webContents.executeJavaScript(`
+      (function() {
+        let cornerTaps = [];
+        const CORNER_SIZE = 100;
+        const TAP_TIMEOUT = 3000;
+        const REQUIRED_TAPS = 5;
+        let tapIndicator = null;
+
+        // Create visual feedback element
+        function createTapIndicator() {
+          if (!tapIndicator) {
+            tapIndicator = document.createElement('div');
+            tapIndicator.style.position = 'fixed';
+            tapIndicator.style.top = '10px';
+            tapIndicator.style.right = '10px';
+            tapIndicator.style.width = '50px';
+            tapIndicator.style.height = '50px';
+            tapIndicator.style.background = 'rgba(255, 0, 0, 0.5)';
+            tapIndicator.style.borderRadius = '50%';
+            tapIndicator.style.zIndex = '999999';
+            tapIndicator.style.display = 'none';
+            tapIndicator.style.alignItems = 'center';
+            tapIndicator.style.justifyContent = 'center';
+            tapIndicator.style.fontSize = '24px';
+            tapIndicator.style.color = 'white';
+            tapIndicator.style.fontWeight = 'bold';
+            tapIndicator.style.pointerEvents = 'none';
+            document.body.appendChild(tapIndicator);
+          }
+          return tapIndicator;
+        }
+
+        function updateIndicator(count) {
+          const indicator = createTapIndicator();
+          if (count > 0) {
+            indicator.textContent = count;
+            indicator.style.display = 'flex';
+            setTimeout(() => {
+              if (cornerTaps.length === 0) {
+                indicator.style.display = 'none';
+              }
+            }, 500);
+          } else {
+            indicator.style.display = 'none';
+          }
+        }
+
+        // Prevent all default touch behaviors
+        document.addEventListener('touchstart', function(e) {
+          const touch = e.touches[0];
+          const x = touch.clientX;
+          const y = touch.clientY;
+          const windowWidth = window.innerWidth;
+          const windowHeight = window.innerHeight;
+
+          // Check if touch is in top-right corner
+          if (x > windowWidth - CORNER_SIZE && y < CORNER_SIZE) {
+            const now = Date.now();
+            
+            // Clean up old taps
+            cornerTaps = cornerTaps.filter(t => now - t < TAP_TIMEOUT);
+            
+            // Add new tap
+            cornerTaps.push(now);
+            console.log('Corner tap registered:', cornerTaps.length, 'of', REQUIRED_TAPS);
+            
+            // Update visual feedback
+            updateIndicator(cornerTaps.length);
+            
+            // Check if we have enough taps
+            if (cornerTaps.length >= REQUIRED_TAPS) {
+              console.log('Exit sequence completed!');
+              window.kioskExit && window.kioskExit.triggerExit();
+              cornerTaps = [];
+              updateIndicator(0);
+            }
+          } else {
+            // Reset if tap outside corner
+            if (cornerTaps.length > 0) {
+              cornerTaps = [];
+              updateIndicator(0);
+            }
+          }
+          
+          // Prevent default on all edge swipes
+          if (x < 20 || x > windowWidth - 20 || y < 20 || y > windowHeight - 20) {
+            e.preventDefault();
+            return false;
+          }
+        }, { passive: false, capture: true });
+
+        // Block all gesture events
+        document.addEventListener('touchmove', function(e) {
+          // Allow scrolling within the page content, but prevent edge swipes
+          const touch = e.touches[0];
+          const x = touch.clientX;
+          const y = touch.clientY;
+          const windowWidth = window.innerWidth;
+          const windowHeight = window.innerHeight;
+          
+          if (x < 20 || x > windowWidth - 20 || y < 20 || y > windowHeight - 20) {
+            e.preventDefault();
+            return false;
+          }
+        }, { passive: false, capture: true });
+
+        document.addEventListener('touchend', function(e) {
+          // Prevent edge gesture completion
+          e.stopPropagation();
+        }, { capture: true });
+
+        // Prevent mouse edge gestures
+        document.addEventListener('mousedown', function(e) {
+          if (e.clientX < 5 || e.clientX > window.innerWidth - 5 || 
+              e.clientY < 5 || e.clientY > window.innerHeight - 5) {
+            e.preventDefault();
+            return false;
+          }
+        }, { passive: false, capture: true });
+
+        // Prevent all scrolling at edges
+        let lastY = 0;
+        document.addEventListener('wheel', function(e) {
+          // Allow normal scrolling but prevent overscroll
+          const deltaY = e.deltaY;
+          const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+          const scrollHeight = document.documentElement.scrollHeight;
+          const clientHeight = document.documentElement.clientHeight;
+          
+          if ((scrollTop === 0 && deltaY < 0) || 
+              (scrollTop + clientHeight >= scrollHeight && deltaY > 0)) {
+            e.preventDefault();
+            return false;
+          }
+        }, { passive: false });
+
+        console.log('Gesture blocking and 5-tap exit control initialized');
+      })();
+    `);
+  });
 }
 
 // Register global keyboard shortcut to exit kiosk
@@ -134,6 +309,13 @@ function registerExitShortcut() {
     console.log('Exit shortcut registered: Ctrl+Alt+X');
   }
 }
+
+// Handle exit trigger from 5-tap corner control
+ipcMain.on('kiosk-exit-trigger', () => {
+  console.log('5-tap corner exit triggered - quitting application');
+  app.isQuitting = true;
+  app.quit();
+});
 
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {

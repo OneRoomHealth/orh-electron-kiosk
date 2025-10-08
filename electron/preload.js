@@ -35,3 +35,10 @@ contextBridge.exposeInMainWorld('kioskMode', {
   enabled: true,
   exitShortcut: 'Ctrl+Alt+X'
 });
+
+// Expose exit trigger for 5-tap corner control
+contextBridge.exposeInMainWorld('kioskExit', {
+  triggerExit: () => {
+    ipcRenderer.send('kiosk-exit-trigger');
+  }
+});
