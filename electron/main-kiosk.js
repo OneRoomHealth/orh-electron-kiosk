@@ -122,7 +122,7 @@ function createWindow() {
 
 // Register global keyboard shortcut to exit kiosk
 function registerExitShortcut() {
-  const ret = globalShortcut.register('CommandOrControl+Alt+X', () => {
+  const ret = globalShortcut.register('Control+Alt+X', () => {
     console.log('Exit shortcut pressed - quitting application');
     app.isQuitting = true;
     app.quit();
