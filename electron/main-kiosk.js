@@ -155,6 +155,9 @@ function createWindow() {
     // Inject JavaScript to handle 5-tap corner exit
     mainWindow.webContents.executeJavaScript(`
       (function() {
+        console.log('5-tap exit control initializing...');
+        console.log('window.kioskExit available:', typeof window.kioskExit !== 'undefined');
+        
         let cornerTaps = [];
         const CORNER_SIZE = 100;
         const TAP_TIMEOUT = 3000;
@@ -225,7 +228,21 @@ function createWindow() {
             // Check if we have enough taps
             if (cornerTaps.length >= REQUIRED_TAPS) {
               console.log('Exit sequence completed!');
-              window.kioskExit && window.kioskExit.triggerExit();
+              console.log('Attempting to trigger exit...');
+              
+              try {
+                if (window.kioskExit && typeof window.kioskExit.triggerExit === 'function') {
+                  console.log('Calling window.kioskExit.triggerExit()');
+                  window.kioskExit.triggerExit();
+                  console.log('Exit function called successfully');
+                } else {
+                  console.error('window.kioskExit.triggerExit is not available!');
+                  console.error('window.kioskExit:', window.kioskExit);
+                }
+              } catch (err) {
+                console.error('Error calling exit function:', err);
+              }
+              
               cornerTaps = [];
               updateIndicator(0);
             }
@@ -310,12 +327,30 @@ function registerExitShortcut() {
   }
 }
 
-// Handle exit trigger from 5-tap corner control
+// Handle exit trigger from 5-tap corner control (must be registered before app.whenReady)
 ipcMain.on('kiosk-exit-trigger', () => {
   console.log('5-tap corner exit triggered - quitting application');
   app.isQuitting = true;
+  
+  // Force quit all windows
+  BrowserWindow.getAllWindows().forEach(win => {
+    try {
+      win.destroy();
+    } catch (e) {
+      console.error('Error destroying window:', e);
+    }
+  });
+  
   app.quit();
+  
+  // Fallback force exit after 2 seconds
+  setTimeout(() => {
+    console.log('Force exiting...');
+    process.exit(0);
+  }, 2000);
 });
+
+console.log('IPC handler for kiosk-exit-trigger registered');
 
 // This method will be called when Electron has finished initialization
 app.whenReady().then(async () => {

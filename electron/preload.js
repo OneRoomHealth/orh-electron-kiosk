@@ -39,6 +39,14 @@ contextBridge.exposeInMainWorld('kioskMode', {
 // Expose exit trigger for 5-tap corner control
 contextBridge.exposeInMainWorld('kioskExit', {
   triggerExit: () => {
-    ipcRenderer.send('kiosk-exit-trigger');
+    console.log('[Preload] triggerExit called, sending IPC message...');
+    try {
+      ipcRenderer.send('kiosk-exit-trigger');
+      console.log('[Preload] IPC message sent successfully');
+    } catch (error) {
+      console.error('[Preload] Error sending IPC message:', error);
+    }
   }
 });
+
+console.log('[Preload] kioskExit exposed to window object');
