@@ -1,5 +1,6 @@
 const { app, BrowserWindow, globalShortcut, session } = require('electron');
 const path = require('path');
+const autostart = require('./autostart');
 require('dotenv').config();
 
 // Disable hardware acceleration gestures on Windows tablets (must be before app.ready)
@@ -135,9 +136,17 @@ function registerExitShortcut() {
 }
 
 // This method will be called when Electron has finished initialization
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   registerExitShortcut();
+  
+  // Enable auto-start on system boot
+  try {
+    await autostart.enable();
+    console.log('Auto-start configured successfully');
+  } catch (error) {
+    console.error('Failed to configure auto-start:', error);
+  }
   
   // Block Windows key combinations that might exit kiosk
   // Note: Alt+Tab and Ctrl+Alt+Delete are system-level and cannot be blocked
