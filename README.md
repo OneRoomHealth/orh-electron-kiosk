@@ -101,27 +101,28 @@ npm run build:linux
 
 For immediate launch (bypassing Windows desktop) on Windows 11 Pro/Enterprise:
 
-1. Install the application using the standard installer
-2. **Right-click PowerShell** and select **"Run as Administrator"**
-3. Navigate to the installation directory:
-   ```powershell
-   cd "$env:LOCALAPPDATA\Programs\OneRoom Health Kiosk\resources\app\electron"
-   ```
-4. Run the configuration script:
-   ```powershell
-   .\setup-kiosk-mode.ps1
-   ```
-5. Follow the prompts and restart when complete
+1. **Install the application** using the standard installer
+2. **Open Windows Settings** → **Accounts** → **Other users**
+3. Click **"Set up a kiosk"** (or **"Assigned access"** on some Windows versions)
+4. Click **"Get started"**
+5. **Create a new kiosk account** or select an existing local user account
+6. In the app selection screen, select **"OneRoom Health Kiosk"** from the list
+7. Click **"Close"** to complete the setup
+8. **Sign out** and log in with the kiosk user account
 
-This configures:
+The app will now launch immediately when the kiosk user logs in, bypassing the Windows desktop.
+
+**What's Configured:**
 - Windows Assigned Access (single-app kiosk mode)
 - Immediate launch on login (no desktop shown)
-- Disabled edge swipes and lock screen
-- Optimized power settings
-- High-priority startup
+- App runs in secure, locked-down mode
+- Touch gesture protection and exit methods built-in
 
 **To Remove Kiosk Mode:**
-Run `.\setup-kiosk-mode-remove.ps1` as Administrator and restart.
+1. Log in with an administrator account
+2. Go to **Settings** → **Accounts** → **Other users**
+3. Find the kiosk user and click **"Remove kiosk"**
+4. Delete the kiosk user account if no longer needed
 
 ### GitHub Actions Release
 
@@ -226,6 +227,25 @@ If the kiosk auto-starts and you need to disable it:
 3. Find "OneRoom Health Kiosk" and disable it
 4. Restart the computer
 
+### App Not Appearing in Kiosk App List
+
+If "OneRoom Health Kiosk" doesn't appear in Windows Settings → Accounts → Other users → Assigned access:
+
+1. **Verify the app is installed**: Check that it's installed in one of these locations:
+   - `%LOCALAPPDATA%\Programs\OneRoom Health Kiosk\`
+   - `%ProgramFiles%\OneRoom Health Kiosk\`
+   
+2. **Check for the Start Menu shortcut**: The app should appear in Start Menu under "OneRoom Health Kiosk"
+
+3. **Reinstall the application**: The installer automatically registers the app with Windows. Try uninstalling and reinstalling.
+
+4. **Verify Windows edition**: Assigned Access requires Windows 11 Pro, Enterprise, or Education (not Home edition)
+
+5. **Check registry**: Open Registry Editor and verify this key exists:
+   ```
+   HKEY_CURRENT_USER\Software\Classes\AppUserModelId\com.oneroomhealth.kiosk
+   ```
+
 ### Application Crashes on Start
 
 Check the application logs:
@@ -256,10 +276,8 @@ orh-electron-kiosk/
 │   ├── main.js                      # Development entry point
 │   ├── preload.js                   # Secure preload script
 │   ├── autostart.js                 # Windows auto-start utility
-│   ├── setup-kiosk-mode.ps1         # Windows 11 Pro kiosk setup
-│   ├── setup-kiosk-mode-remove.ps1  # Remove kiosk configuration
 │   ├── credentials.js               # (Optional) Credential management
-│   ├── installer.nsh                # NSIS installer customization
+│   ├── installer.nsh                # NSIS installer with AUMID registration
 │   ├── icon.ico                     # Windows application icon
 │   ├── icon.png                     # Linux application icon
 │   └── entitlements.mac.plist       # macOS entitlements
@@ -282,11 +300,11 @@ orh-electron-kiosk/
 
 ## Version History
 
-### v1.0.6 (Current)
+### v1.0.8 (Current)
+- **Windows Kiosk Mode Support**: Proper AUMID registration makes app visible in Windows Assigned Access settings
+- **Simplified Setup**: Removed PowerShell scripts - kiosk mode now configured through Windows Settings UI
 - **Complete gesture blocking**: Bulletproof protection against ALL touch navigation
 - **5-tap corner exit**: Touch-friendly exit method for tablets with visual feedback
-- **Windows 11 Pro Assigned Access**: Immediate launch configuration (bypasses desktop)
-- **PowerShell utilities**: Automated setup/removal scripts for full kiosk mode
 - **Enhanced startup priority**: Task Scheduler integration for reliable boot
 
 ### v1.0.5

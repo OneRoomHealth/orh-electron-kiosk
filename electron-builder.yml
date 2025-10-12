@@ -35,8 +35,10 @@ nsis:
   installerIcon: electron/icon.ico
   uninstallerIcon: electron/icon.ico
   perMachine: false
-  # This creates a registry entry for auto-start
+  # Custom NSIS script for AUMID registration and Windows Kiosk Mode support
   include: electron/installer.nsh
+  # Ensure the app is registered for Windows Assigned Access (Kiosk Mode)
+  displayLanguageSelector: false
 
 # macOS Configuration  
 mac:

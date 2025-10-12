@@ -3,6 +3,12 @@ const path = require('path');
 const autostart = require('./autostart');
 require('dotenv').config();
 
+// Set Application User Model ID for Windows Kiosk Mode
+// This ensures Windows can properly identify and manage the app in Assigned Access
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.oneroomhealth.kiosk');
+}
+
 // Disable hardware acceleration gestures on Windows tablets (must be before app.ready)
 app.commandLine.appendSwitch('disable-pinch');
 app.commandLine.appendSwitch('disable-touch-drag-drop');
