@@ -1,28 +1,26 @@
-# OneRoom Health Electron Kiosk
+# OneRoom Health Electron Display
 
-Enterprise-grade kiosk application for OneRoom Health clinical operations, built with Electron for Windows tablets and desktop deployment.
+Flexible display application for OneRoom Health clinical operations, built with Electron for Windows, macOS, and Linux deployment.
 
 ## Overview
 
-This Electron application runs in full kiosk mode, loading the OneRoom Health web application in a secure, locked-down environment. It's specifically designed for Surface tablets and healthcare kiosks running Windows 11 Pro.
+This Electron application displays a static background image by default and can be remotely controlled to navigate to arbitrary URLs in a full-screen Chromium browser view. It's designed for digital signage, kiosks, and clinical display systems.
 
 ## Features
 
-- **True Kiosk Mode**: Fullscreen, frameless window that prevents exit via gestures or standard shortcuts
-- **Complete Touch Gesture Protection**: Blocks ALL edge swipes, pinch, drag, and tablet gestures
-- **Immediate Launch**: Windows 11 Pro Assigned Access support for instant app launch (bypasses desktop)
-- **Persistent Sessions**: Maintains OAuth login sessions across app restarts
-- **Auto-start on Boot**: Automatically launches when Windows starts with high priority
-- **Secure Navigation**: Restricts navigation to approved domains only
-- **OAuth Support**: Handles Microsoft Azure AD authentication popups
-- **Dual Exit Methods**: 
-  - `Ctrl+Alt+X` keyboard shortcut
-  - 5-tap sequence in top-right corner (for tablets)
+- **Static Background Display**: Shows a customizable PNG image on launch
+- **Remote Navigation Control**: Switch to any URL via WebSocket or HTTP commands
+- **Dual Control Modes**:
+  - WebSocket client for real-time remote control
+  - Local HTTP API for programmatic control
+- **Flexible Window Modes**: Full-screen or maximized window (configurable)
+- **No Restrictions**: Standard browser navigation, right-click menus, and DevTools available
+- **Cross-Platform**: Runs on Windows, macOS, and Linux
 
 ## Prerequisites
 
 - Node.js 20.x or higher
-- Windows 11 Pro (recommended for kiosk deployments)
+- npm or yarn package manager
 - Git (for cloning the repository)
 
 ## Installation
@@ -45,14 +43,20 @@ npm install
 Create a `.env` file in the root directory:
 
 ```bash
-# Production URL
-PROD_URL=https://orh-frontend-container-prod.purplewave-6482a85c.westus2.azurecontainerapps.io/login
+# Optional: WebSocket server URL for remote control
+WORKSTATION_WS_URL=ws://localhost:9000/ws
 
-# Environment
-NODE_ENV=production
+# Optional: HTTP control server port (default: 8787)
+HTTP_CONTROL_PORT=8787
+
+# Optional: Start in full-screen mode (default: false, uses maximized)
+FULLSCREEN=true
 ```
 
-You can also use `KIOSK_URL` instead of `PROD_URL` if you want to override the URL specifically for kiosk mode.
+All environment variables are optional. Without configuration, the app will:
+- Start maximized (not full-screen)
+- Run local HTTP control server on port 8787
+- Not connect to any WebSocket server
 
 ## Development
 
@@ -62,9 +66,9 @@ To run the application in development mode:
 npm start
 ```
 
-This will launch the kiosk in fullscreen mode and load the configured production URL.
+This will launch the app showing the background image. You can then control it via HTTP or WebSocket.
 
-## Building the Installer
+## Building the Application
 
 ### Build Windows Installer (.exe)
 
@@ -72,11 +76,7 @@ This will launch the kiosk in fullscreen mode and load the configured production
 npm run build:win
 ```
 
-This creates an NSIS installer in the `release/` directory. The installer includes:
-- Auto-start configuration option
-- Desktop shortcut creation
-- Start menu entry
-- Clean uninstall support
+Creates an NSIS installer in the `release/` directory.
 
 ### Build for Other Platforms
 
@@ -88,246 +88,322 @@ npm run build:mac
 npm run build:linux
 ```
 
-## Deployment
+## Usage
 
-### Standard Installation
+### Default Behavior
 
-1. Run the `.exe` installer from the `release/` directory
-2. Follow the installation wizard
-3. Choose whether to enable auto-start on Windows boot
-4. The application will launch automatically after installation
+On launch, the app displays the static background image located at:
+```
+electron/renderer/assets/background.png
+```
 
-### Windows 11 Pro - Full Kiosk Mode (Recommended)
+To customize this image, replace `background.png` with your own 1920x1080 (or higher) PNG image before building.
 
-For immediate launch (bypassing Windows desktop) on Windows 11 Pro/Enterprise:
+### Remote Control via HTTP
 
-1. **Install the application** using the standard installer
-2. **Open Windows Settings** → **Accounts** → **Other users**
-3. Click **"Set up a kiosk"** (or **"Assigned access"** on some Windows versions)
-4. Click **"Get started"**
-5. **Create a new kiosk account** or select an existing local user account
-6. In the app selection screen, select **"OneRoom Health Kiosk"** from the list
-7. Click **"Close"** to complete the setup
-8. **Sign out** and log in with the kiosk user account
+The app exposes a local HTTP API on `127.0.0.1` (default port 8787).
 
-The app will now launch immediately when the kiosk user logs in, bypassing the Windows desktop.
+#### Navigate to a URL
 
-**What's Configured:**
-- Windows Assigned Access (single-app kiosk mode)
-- Immediate launch on login (no desktop shown)
-- App runs in secure, locked-down mode
-- Touch gesture protection and exit methods built-in
-
-**To Remove Kiosk Mode:**
-1. Log in with an administrator account
-2. Go to **Settings** → **Accounts** → **Other users**
-3. Find the kiosk user and click **"Remove kiosk"**
-4. Delete the kiosk user account if no longer needed
-
-### GitHub Actions Release
-
-This project includes automated GitHub Actions workflow for releases:
-
-1. **Commit your changes** to the main branch
-2. **Create and push a version tag**:
 ```bash
-   git tag v1.0.3
-   git push origin main
-   git push origin v1.0.3
-   ```
-3. **GitHub Actions will automatically**:
-   - Build the Windows installer
-   - Create a GitHub release
-   - Attach the `.exe` file to the release
+curl -X POST http://127.0.0.1:8787/navigate \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
+```
 
-The workflow is defined in `.github/workflows/release-win.yml`.
+#### Return to Splash Screen
+
+```bash
+curl -X POST http://127.0.0.1:8787/splash
+```
+
+#### Change HTTP Port
+
+Set the `HTTP_CONTROL_PORT` environment variable:
+
+```bash
+HTTP_CONTROL_PORT=9000 npm start
+```
+
+### Remote Control via WebSocket
+
+If `WORKSTATION_WS_URL` is set, the app connects as a WebSocket client.
+
+#### WebSocket Message Format
+
+**Navigate to URL:**
+```json
+{
+  "type": "navigate",
+  "url": "https://example.com"
+}
+```
+
+**Return to splash:**
+```json
+{
+  "type": "splash"
+}
+```
+
+#### Example WebSocket Server Setup
+
+```bash
+# Set environment variable
+export WORKSTATION_WS_URL=ws://localhost:9000/ws
+
+# Start the app
+npm start
+```
+
+The app will connect to the WebSocket server and listen for commands. If disconnected, it automatically reconnects with exponential backoff.
+
+### Window Modes
+
+#### Full-Screen Mode
+
+```bash
+FULLSCREEN=true npm start
+```
+
+Full-screen can be exited using standard OS controls (F11, Esc on some systems).
+
+#### Maximized Mode (Default)
+
+```bash
+npm start
+```
+
+The window starts maximized but can be resized, minimized, or closed normally.
 
 ## Configuration Files
 
-### Main Kiosk File
-- **`electron/main-kiosk.js`**: Production kiosk mode (current entry point)
-- **`electron/main.js`**: Development mode with DevTools
+### Main Application Files
 
-### Key Configuration Files
+- **`electron/main-states.js`**: Main process entry point with state management
+- **`electron/preload.js`**: Minimal preload script for renderer processes
+- **`electron/renderer/splash.html`**: Static background display page
+- **`electron/renderer/assets/background.png`**: Default background image
+
+### Build Configuration
+
 - **`package.json`**: Application metadata and build scripts
-- **`electron-builder.yml`**: Build configuration for installers
-- **`electron/installer.nsh`**: Custom NSIS installer scripts
-- **`electron/preload.js`**: Secure preload script for renderer process
-- **`electron/autostart.js`**: Utility for managing Windows auto-start
+- **`electron-builder.yml`**: Electron Builder configuration
+- **`.env`**: Environment variables (not tracked in git)
 
-## Usage
+## API Reference
 
-### Starting the Kiosk
+### HTTP API
 
-The application will start automatically if configured during installation. You can also launch it from:
-- Desktop shortcut
-- Start menu: "OneRoom Health Kiosk"
-- Task Manager → Run new task → "OneRoom Health Kiosk"
+**Base URL:** `http://127.0.0.1:8787` (or custom port)
 
-### Exiting the Kiosk
+#### POST /navigate
 
-**For Administrators - Two Methods:**
+Navigate to a URL in a BrowserView.
 
-1. **Keyboard Shortcut**: Press `Ctrl+Alt+X` simultaneously
-2. **Touch Gesture (Tablet)**: Tap the top-right corner 5 times within 3 seconds
-   - Visual feedback: A red circle appears showing tap count
-   - Must complete all 5 taps in the corner within 3 seconds
+**Request:**
+```json
+{
+  "url": "https://example.com"
+}
+```
 
-**Note**: These are the ONLY ways to exit the application. All other exit methods (Alt+F4, closing window, swipe gestures, etc.) are completely disabled for security.
+**Response:**
+```json
+{
+  "success": true,
+  "url": "https://example.com"
+}
+```
 
-### Blocked Shortcuts
+#### POST /splash
 
-The following shortcuts are blocked to prevent accidental exit:
-- `Alt+F4` - Close window
-- `Ctrl+Shift+Escape` - Task Manager
-- `F11` - Exit fullscreen
-- `Command+Q` / `Command+W` - macOS quit/close
+Return to the splash screen.
 
-**Note**: `Alt+Tab` and `Ctrl+Alt+Delete` cannot be blocked as they are system-level Windows shortcuts.
+**Response:**
+```json
+{
+  "success": true
+}
+```
 
-## Kiosk Security Features
+### WebSocket Protocol
 
-### Window Protection
-- Non-resizable, non-movable, frameless window
-- Always on top, cannot be minimized
-- Blocks close attempts and restores focus
-- Prevents minimize via swipe gestures
+Connect to the app by setting `WORKSTATION_WS_URL` to point to your WebSocket server. The app acts as a client.
 
-### Touch Gesture Protection
-- Completely blocks ALL edge swipes (left, right, top, bottom)
-- Disables pinch-to-zoom and smooth scrolling
-- Disables touch drag-and-drop and touch editing
-- Prevents overscroll navigation gestures
-- Blocks tablet mode gesture transitions
-- Aggressive focus retention (checks every 1 second)
-- CSS-level touch-action blocking for bulletproof protection
+**Message Types:**
 
-### Navigation Security
-- Restricts navigation to approved domains:
-  - `purplewave-6482a85c.westus2.azurecontainerapps.io`
-  - `login.microsoftonline.com`
-  - `microsoft.com`
-- Blocks popup windows except for OAuth authentication
-- Disables right-click context menu
-
-## Troubleshooting
-
-### Kiosk Won't Exit
-
-If `Ctrl+Alt+X` doesn't work:
-1. Try `Ctrl+Alt+Delete` → Task Manager → End Task on "OneRoom Health Kiosk"
-2. If Task Manager is blocked, restart the computer
-3. Disable auto-start before restarting (see below)
-
-### Disable Auto-Start
-
-If the kiosk auto-starts and you need to disable it:
-1. Press `Ctrl+Alt+Delete` to access Task Manager
-2. Go to "Startup" tab
-3. Find "OneRoom Health Kiosk" and disable it
-4. Restart the computer
-
-### App Not Appearing in Kiosk App List
-
-If "OneRoom Health Kiosk" doesn't appear in Windows Settings → Accounts → Other users → Assigned access:
-
-1. **Verify the app is installed**: Check that it's installed in one of these locations:
-   - `%LOCALAPPDATA%\Programs\OneRoom Health Kiosk\`
-   - `%ProgramFiles%\OneRoom Health Kiosk\`
-   
-2. **Check for the Start Menu shortcut**: The app should appear in Start Menu under "OneRoom Health Kiosk"
-
-3. **Reinstall the application**: The installer automatically registers the app with Windows. Try uninstalling and reinstalling.
-
-4. **Verify Windows edition**: Assigned Access requires Windows 11 Pro, Enterprise, or Education (not Home edition)
-
-5. **Check registry**: Open Registry Editor and verify this key exists:
-   ```
-   HKEY_CURRENT_USER\Software\Classes\AppUserModelId\com.oneroomhealth.kiosk
+1. **Navigate**
+   ```json
+   {
+     "type": "navigate",
+     "url": "https://example.com"
+   }
    ```
 
-### Application Crashes on Start
-
-Check the application logs:
-- Windows: `%APPDATA%\orh-electron-kiosk\logs\`
-- macOS: `~/Library/Logs/orh-electron-kiosk/`
-
-### OAuth Login Issues
-
-If login fails or doesn't persist:
-1. Clear the application session data:
-   - Windows: Delete `%APPDATA%\orh-electron-kiosk\`
-2. Restart the application
-3. Complete the OAuth flow again
-
-### Build Errors
-
-If `npm run build:win` fails:
-- Ensure Node.js 20.x is installed
-- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-- Check that you have the latest version of electron-builder
-
-## Project Structure
-
-```
-orh-electron-kiosk/
-├── electron/                         # Electron main process files
-│   ├── main-kiosk.js                # Production kiosk entry point
-│   ├── main.js                      # Development entry point
-│   ├── preload.js                   # Secure preload script
-│   ├── autostart.js                 # Windows auto-start utility
-│   ├── credentials.js               # (Optional) Credential management
-│   ├── installer.nsh                # NSIS installer with AUMID registration
-│   ├── icon.ico                     # Windows application icon
-│   ├── icon.png                     # Linux application icon
-│   └── entitlements.mac.plist       # macOS entitlements
-├── .github/workflows/          # GitHub Actions workflows
-│   └── release-win.yml         # Windows release automation
-├── release/                    # Build output directory
-├── .env                        # Environment configuration (not in git)
-├── .env.example                # Environment template
-├── package.json                # NPM package configuration
-├── electron-builder.yml        # Electron builder configuration
-└── README.md                   # This file
-```
+2. **Splash**
+   ```json
+   {
+     "type": "splash"
+   }
+   ```
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PROD_URL` or `KIOSK_URL` | URL to load in kiosk mode | Azure Container Apps URL |
-| `NODE_ENV` | Environment mode | `production` |
+| `WORKSTATION_WS_URL` | WebSocket server URL to connect to (optional) | None |
+| `HTTP_CONTROL_PORT` | Port for local HTTP control server | 8787 |
+| `FULLSCREEN` | Start in full-screen mode (`true`/`false`) | `false` |
+
+## Deployment
+
+### Standard Installation
+
+1. Run the installer from the `release/` directory
+2. Follow the installation wizard
+3. Launch from the Start menu or desktop shortcut
+
+### Auto-Start Configuration
+
+To run the app on system boot, use your OS's auto-start mechanism:
+
+**Windows:**
+- Add a shortcut to: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+
+**macOS:**
+- System Preferences → Users & Groups → Login Items
+
+**Linux:**
+- Add to systemd user services or desktop autostart
+
+## Customization
+
+### Change Background Image
+
+Replace `electron/renderer/assets/background.png` with your own image before building. Recommended resolution: 1920x1080 or higher.
+
+### Modify Splash Screen
+
+Edit `electron/renderer/splash.html` to customize the appearance. The current implementation uses a full-bleed centered image.
+
+## Troubleshooting
+
+### App Won't Start
+
+Check that Node.js 20.x or higher is installed:
+```bash
+node --version
+```
+
+### HTTP Control Not Working
+
+Verify the port isn't already in use:
+```bash
+# Linux/macOS
+lsof -i :8787
+
+# Windows
+netstat -ano | findstr :8787
+```
+
+Try changing the port:
+```bash
+HTTP_CONTROL_PORT=9000 npm start
+```
+
+### WebSocket Won't Connect
+
+Ensure the WebSocket server is running and accessible:
+```bash
+# Test with a WebSocket client
+wscat -c ws://localhost:9000/ws
+```
+
+Check the app console for connection errors.
+
+### Background Image Not Showing
+
+Verify the image exists:
+```bash
+ls electron/renderer/assets/background.png
+```
+
+Check the browser console (DevTools) for loading errors.
+
+### Build Errors
+
+Clear dependencies and reinstall:
+```bash
+rm -rf node_modules package-lock.json
+npm install
+npm run build:win
+```
+
+## Project Structure
+
+```
+orh-electron-kiosk/
+├── electron/
+│   ├── main-states.js                # Main process (new entry point)
+│   ├── main-kiosk.js                 # Legacy kiosk mode (deprecated)
+│   ├── main.js                       # Legacy dev mode (deprecated)
+│   ├── preload.js                    # Preload script
+│   ├── renderer/
+│   │   ├── splash.html               # Splash screen HTML
+│   │   └── assets/
+│   │       └── background.png        # Background image
+│   ├── autostart.js                  # Auto-start utility
+│   ├── credentials.js                # Credential management (legacy)
+│   ├── installer.nsh                 # NSIS installer scripts
+│   ├── icon.ico                      # Windows icon
+│   ├── icon.png                      # Linux icon
+│   └── entitlements.mac.plist        # macOS entitlements
+├── .github/workflows/
+│   └── release-win.yml               # GitHub Actions release workflow
+├── release/                          # Build output directory
+├── .env                              # Environment configuration (not in git)
+├── package.json                      # NPM package configuration
+├── electron-builder.yml              # Electron Builder configuration
+└── README.md                         # This file
+```
+
+## Security Considerations
+
+This application does **not** include kiosk security features:
+
+- ❌ No domain allowlists
+- ❌ No navigation restrictions
+- ❌ No context menu blocking
+- ❌ No keyboard shortcut blocking
+- ❌ No forced focus retention
+- ❌ No PIN protection
+
+For kiosk deployments requiring security, use the previous kiosk version (v1.0.8) or implement custom restrictions.
 
 ## Version History
 
-### v1.0.8 (Current)
-- **Windows Kiosk Mode Support**: Proper AUMID registration makes app visible in Windows Assigned Access settings
-- **Simplified Setup**: Removed PowerShell scripts - kiosk mode now configured through Windows Settings UI
-- **Complete gesture blocking**: Bulletproof protection against ALL touch navigation
-- **5-tap corner exit**: Touch-friendly exit method for tablets with visual feedback
-- **Enhanced startup priority**: Task Scheduler integration for reliable boot
+### v1.0.9 (Current - Flexible Display)
+- **Removed kiosk restrictions**: No more PIN, gesture blocking, or navigation allowlists
+- **New state management**: Switch between splash screen and arbitrary URLs
+- **Remote control**: WebSocket client and HTTP API for navigation
+- **Configurable window modes**: Full-screen or maximized
+- **Simplified architecture**: Clean separation of concerns
 
-### v1.0.5
-- Fixed exit shortcut to use Control+Alt+X directly
-- Improved startup priority with Windows Task Scheduler
-- Better auto-launch reliability
+### v1.0.8 (Legacy Kiosk)
+- Windows Kiosk Mode support with AUMID registration
+- Complete gesture blocking and touch protection
+- 5-tap corner exit and PIN protection
+- Domain allowlist enforcement
 
-### v1.0.4
-- Added auto-launch dependency
-- Fixed auto-start functionality
-- Integrated autostart module into main process
+## Migration from Kiosk Mode
 
-### v1.0.3
-- Enhanced tablet swipe gesture protection
-- Added minimize prevention
-- Improved focus retention
-- Fixed exit shortcut conflicts
+If migrating from v1.0.8 kiosk mode:
 
-### v1.0.0
-- Initial production release
-- Basic kiosk mode functionality
-- OAuth support
-- Auto-start capability
+1. **Remove Windows Assigned Access** if configured
+2. **Update environment variables**: Remove `KIOSK_URL`, add new vars as needed
+3. **Rebuild the application**: `npm install && npm run build:win`
+4. **Test control interfaces**: Verify HTTP and WebSocket control work
 
 ## Support
 
