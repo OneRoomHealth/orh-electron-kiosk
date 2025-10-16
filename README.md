@@ -1,15 +1,27 @@
-# OneRoom Health Electron Display
+# OneRoom Health Electron Kiosk
 
-Flexible display application for OneRoom Health clinical operations, built with Electron for Windows, macOS, and Linux deployment.
+State-managed display application for OneRoom Health clinical operations, built with Electron for Windows, macOS, and Linux deployment.
 
 ## Overview
 
-This Electron application displays a static background image by default and can be remotely controlled to navigate to arbitrary URLs in a full-screen Chromium browser view. It's designed for digital signage, kiosks, and clinical display systems.
+This Electron application provides a four-state display system optimized for LED CareWall displays and provider workstations. It can be remotely controlled via HTTP or WebSocket to transition between states with dynamic parameters for room IDs, appointments, and sessions.
+
+## 📚 Documentation Quick Links
+
+- **[QUICKSTART.md](./QUICKSTART.md)** - Get started in 5 minutes
+- **[STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md)** - Complete state system guide  
+- **[MIGRATION.md](./MIGRATION.md)** - Upgrading from v1.0.8
+- **[DOCS_INDEX.md](./DOCS_INDEX.md)** - Full documentation index
 
 ## Features
 
-- **Static Background Display**: Shows a customizable PNG image on launch
-- **Remote Navigation Control**: Switch to any URL via WebSocket or HTTP commands
+- **State Management System**: Four pre-configured states for LED CareWall displays
+  - Screensaver/Idle mode
+  - Carescape (pre-session)
+  - In-Session CareWall
+  - Goodbye/Thank you screen
+- **User Type Configuration**: Install as Provider workstation or LED CareWall display
+- **Remote Navigation Control**: Switch between states via WebSocket or HTTP commands
 - **Dual Control Modes**:
   - WebSocket client for real-time remote control
   - Local HTTP API for programmatic control
@@ -43,6 +55,18 @@ npm install
 Create a `.env` file in the root directory:
 
 ```bash
+# User Type: 'provider' or 'ledcarewall'
+USER_TYPE=ledcarewall
+
+# Auto-start on system boot (default: true)
+AUTO_START=true  # Set to 'false' to disable
+
+# LED CareWall Display URLs
+SCREENSAVER_URL=splash
+CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care
+IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma
+GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt
+
 # Optional: WebSocket server URL for remote control
 WORKSTATION_WS_URL=ws://localhost:9000/ws
 
@@ -56,6 +80,7 @@ FULLSCREEN=true
 All environment variables are optional. Without configuration, the app will:
 - Start maximized (not full-screen)
 - Run local HTTP control server on port 8787
+- Use default LED CareWall URLs
 - Not connect to any WebSocket server
 
 ## Development
@@ -92,28 +117,60 @@ npm run build:linux
 
 ### Default Behavior
 
-On launch, the app displays the static background image located at:
+On launch, the app displays the screensaver (static background image) located at:
 ```
 electron/renderer/assets/background.png
 ```
 
 To customize this image, replace `background.png` with your own 1920x1080 (or higher) PNG image before building.
 
+### State Management
+
+The kiosk supports four states designed for LED CareWall displays:
+
+1. **Screensaver**: Idle state with background image
+2. **Carescape**: Pre-session room display
+3. **In-Session**: Active appointment display
+4. **Goodbye**: Post-appointment thank you screen
+
+See [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) for detailed documentation.
+
 ### Remote Control via HTTP
 
 The app exposes a local HTTP API on `127.0.0.1` (default port 8787).
 
-#### Navigate to a URL
+#### State Commands
 
 ```bash
+# Show screensaver
+curl -X POST http://127.0.0.1:8787/screensaver
+
+# Show carescape with parameters
+curl -X POST http://127.0.0.1:8787/carescape \
+  -H "Content-Type: application/json" \
+  -d '{"roomId": "room-123", "inviteId": "invite-456"}'
+
+# Show in-session view
+curl -X POST http://127.0.0.1:8787/in-session \
+  -H "Content-Type: application/json" \
+  -d '{"roomId": "room-123", "inviteId": "invite-456"}'
+
+# Show goodbye screen
+curl -X POST http://127.0.0.1:8787/goodbye
+
+# Get current status
+curl -X POST http://127.0.0.1:8787/status
+```
+
+#### Legacy Commands
+
+```bash
+# Navigate to arbitrary URL
 curl -X POST http://127.0.0.1:8787/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
-```
 
-#### Return to Splash Screen
-
-```bash
+# Return to splash screen
 curl -X POST http://127.0.0.1:8787/splash
 ```
 
@@ -131,16 +188,43 @@ If `WORKSTATION_WS_URL` is set, the app connects as a WebSocket client.
 
 #### WebSocket Message Format
 
-**Navigate to URL:**
+**State Commands:**
 ```json
+// Screensaver
+{"type": "screensaver"}
+
+// Carescape
+{
+  "type": "carescape",
+  "params": {"roomId": "room-123", "inviteId": "invite-456"}
+}
+
+// In-Session
+{
+  "type": "inSession",
+  "params": {"roomId": "room-123", "inviteId": "invite-456"}
+}
+
+// Goodbye
+{"type": "goodbye"}
+
+// Generic state command
+{
+  "type": "state",
+  "state": "carescape",
+  "params": {"roomId": "room-123"}
+}
+```
+
+**Legacy Commands:**
+```json
+// Navigate to URL
 {
   "type": "navigate",
   "url": "https://example.com"
 }
-```
 
-**Return to splash:**
-```json
+// Return to splash
 {
   "type": "splash"
 }
@@ -252,6 +336,12 @@ Connect to the app by setting `WORKSTATION_WS_URL` to point to your WebSocket se
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `USER_TYPE` | Installation type: `provider` or `ledcarewall` | `ledcarewall` |
+| `AUTO_START` | Auto-start on system boot (`true`/`false`) | `true` |
+| `SCREENSAVER_URL` | Screensaver state URL (use `splash` for local) | `splash` |
+| `CARESCAPE_URL` | Carescape state URL | `https://fe-app.oneroomhealth.app/ledwallview/care` |
+| `IN_SESSION_URL` | In-session state URL | `https://fe-app.oneroomhealth.app/ledwallview/ma` |
+| `GOODBYE_URL` | Goodbye state URL | `https://fe-app.oneroomhealth.app/ledwallview/endAppt` |
 | `WORKSTATION_WS_URL` | WebSocket server URL to connect to (optional) | None |
 | `HTTP_CONTROL_PORT` | Port for local HTTP control server | 8787 |
 | `FULLSCREEN` | Start in full-screen mode (`true`/`false`) | `false` |
@@ -262,7 +352,11 @@ Connect to the app by setting `WORKSTATION_WS_URL` to point to your WebSocket se
 
 1. Run the installer from the `release/` directory
 2. Follow the installation wizard
-3. Launch from the Start menu or desktop shortcut
+3. **Select installation type** (LED CareWall Display or Provider Workstation)
+4. Complete installation
+5. Launch from the Start menu or desktop shortcut
+
+The installer will automatically configure the appropriate user type based on your selection.
 
 ### Auto-Start Configuration
 
@@ -383,12 +477,14 @@ For kiosk deployments requiring security, use the previous kiosk version (v1.0.8
 
 ## Version History
 
-### v1.0.9 (Current - Flexible Display)
-- **Removed kiosk restrictions**: No more PIN, gesture blocking, or navigation allowlists
-- **New state management**: Switch between splash screen and arbitrary URLs
-- **Remote control**: WebSocket client and HTTP API for navigation
-- **Configurable window modes**: Full-screen or maximized
-- **Simplified architecture**: Clean separation of concerns
+### v1.0.9 (Current - State Management)
+- **State management system**: Four pre-configured states for LED CareWall displays
+- **User type configuration**: Provider vs LED CareWall installation types
+- **Enhanced HTTP API**: State-based endpoints with parameter support
+- **WebSocket state control**: Real-time state transitions
+- **Bug fix**: BrowserView alignment corrected (getContentBounds vs getBounds)
+- **Installation wizard**: User type selection during installation
+- **Configurable URLs**: All state URLs customizable via environment variables
 
 ### v1.0.8 (Legacy Kiosk)
 - Windows Kiosk Mode support with AUMID registration

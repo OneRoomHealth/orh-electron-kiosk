@@ -1,6 +1,7 @@
 const { app, BrowserWindow, BrowserView } = require('electron');
 const path = require('path');
 const http = require('http');
+const autostart = require('./autostart');
 require('dotenv').config();
 
 // Set Application User Model ID for Windows
@@ -18,6 +19,24 @@ let reconnectDelay = 1000; // Start with 1 second
 const WORKSTATION_WS_URL = process.env.WORKSTATION_WS_URL;
 const HTTP_CONTROL_PORT = parseInt(process.env.HTTP_CONTROL_PORT || '8787', 10);
 const FULLSCREEN = process.env.FULLSCREEN === 'true';
+const USER_TYPE = (process.env.USER_TYPE || 'ledcarewall').toLowerCase();
+const AUTO_START = process.env.AUTO_START !== 'false'; // Default: true
+
+// State URLs from environment
+const STATE_URLS = {
+  screensaver: process.env.SCREENSAVER_URL || 'splash',
+  carescape: process.env.CARESCAPE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/care',
+  inSession: process.env.IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/ledwallview/ma',
+  goodbye: process.env.GOODBYE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/endAppt',
+};
+
+// Current state tracking
+let currentState = 'screensaver';
+let stateParams = {}; // For storing roomId, inviteId, inviteToken, etc.
+
+console.log('OneRoom Health Kiosk - State Management');
+console.log('User Type:', USER_TYPE);
+console.log('Available States:', Object.keys(STATE_URLS));
 
 /**
  * Show the static splash background image
@@ -47,6 +66,56 @@ function showSplash() {
 }
 
 /**
+ * Build URL with query parameters
+ * @param {string} baseUrl - Base URL
+ * @param {object} params - Query parameters
+ * @returns {string} URL with query parameters
+ */
+function buildUrlWithParams(baseUrl, params = {}) {
+  if (!params || Object.keys(params).length === 0) {
+    return baseUrl;
+  }
+
+  const url = new URL(baseUrl);
+  Object.keys(params).forEach(key => {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      url.searchParams.set(key, params[key]);
+    }
+  });
+  return url.toString();
+}
+
+/**
+ * Transition to a specific state
+ * @param {string} state - State name ('screensaver', 'carescape', 'inSession', 'goodbye')
+ * @param {object} params - Optional parameters (roomId, inviteId, inviteToken, etc.)
+ */
+function setState(state, params = {}) {
+  if (!STATE_URLS[state]) {
+    console.error('Unknown state:', state);
+    console.log('Available states:', Object.keys(STATE_URLS));
+    return;
+  }
+
+  currentState = state;
+  stateParams = { ...params };
+
+  console.info(`Transitioning to state: ${state}`, params);
+
+  const stateUrl = STATE_URLS[state];
+
+  // Handle screensaver/splash state
+  if (state === 'screensaver' || stateUrl === 'splash') {
+    showSplash();
+    return;
+  }
+
+  // Build URL with parameters
+  const url = buildUrlWithParams(stateUrl, params);
+  enterDestination(url);
+}
+
+/**
  * Navigate to a destination URL in a BrowserView
  * @param {string} url - The destination URL
  */
@@ -72,8 +141,8 @@ function enterDestination(url) {
     mainWindow.addBrowserView(currentView);
   }
 
-  // Set bounds to fill the window
-  const bounds = mainWindow.getBounds();
+  // Set bounds to fill the window content area (excluding frame)
+  const bounds = mainWindow.getContentBounds();
   currentView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
   currentView.setAutoResize({ width: true, height: true });
 
@@ -82,6 +151,25 @@ function enterDestination(url) {
 
   // Clear the main window content (show blank while BrowserView loads)
   mainWindow.loadURL('about:blank');
+}
+
+/**
+ * Convenience functions for each state
+ */
+function showScreensaver() {
+  setState('screensaver');
+}
+
+function showCarescape(params = {}) {
+  setState('carescape', params);
+}
+
+function showInSession(params = {}) {
+  setState('inSession', params);
+}
+
+function showGoodbye(params = {}) {
+  setState('goodbye', params);
 }
 
 /**
@@ -118,7 +206,7 @@ function createWindow() {
   // Handle window resize to update BrowserView bounds
   mainWindow.on('resize', () => {
     if (currentView && !currentView.webContents.isDestroyed()) {
-      const bounds = mainWindow.getBounds();
+      const bounds = mainWindow.getContentBounds();
       currentView.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
     }
   });
@@ -155,10 +243,25 @@ function connectWebSocket() {
         const message = JSON.parse(data.toString());
         console.info('Received WebSocket message:', message);
 
+        // Legacy support for navigate and splash
         if (message.type === 'navigate' && message.url) {
           enterDestination(message.url);
         } else if (message.type === 'splash') {
           showSplash();
+        }
+        // New state-based commands
+        else if (message.type === 'state' && message.state) {
+          setState(message.state, message.params || {});
+        }
+        // Convenience state shortcuts
+        else if (message.type === 'screensaver') {
+          showScreensaver();
+        } else if (message.type === 'carescape') {
+          showCarescape(message.params || {});
+        } else if (message.type === 'inSession' || message.type === 'in-session') {
+          showInSession(message.params || {});
+        } else if (message.type === 'goodbye') {
+          showGoodbye(message.params || {});
         } else {
           console.warn('Unknown message type:', message.type);
         }
@@ -219,6 +322,7 @@ function startHttpControlServer() {
 
     req.on('end', () => {
       try {
+        // Legacy endpoints
         if (req.url === '/navigate') {
           const data = JSON.parse(body);
           if (!data.url) {
@@ -230,11 +334,60 @@ function startHttpControlServer() {
           enterDestination(data.url);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true, url: data.url }));
-        } else if (req.url === '/splash') {
+        } 
+        else if (req.url === '/splash') {
           showSplash();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: true }));
-        } else {
+          res.end(JSON.stringify({ success: true, state: 'screensaver' }));
+        }
+        // New state-based endpoints
+        else if (req.url === '/state') {
+          const data = JSON.parse(body);
+          if (!data.state) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing state parameter' }));
+            return;
+          }
+
+          setState(data.state, data.params || {});
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, state: data.state, params: data.params }));
+        }
+        else if (req.url === '/screensaver') {
+          showScreensaver();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, state: 'screensaver' }));
+        }
+        else if (req.url === '/carescape') {
+          const data = body ? JSON.parse(body) : {};
+          showCarescape(data.params || data);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, state: 'carescape', params: data.params || data }));
+        }
+        else if (req.url === '/in-session' || req.url === '/inSession') {
+          const data = body ? JSON.parse(body) : {};
+          showInSession(data.params || data);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, state: 'inSession', params: data.params || data }));
+        }
+        else if (req.url === '/goodbye') {
+          const data = body ? JSON.parse(body) : {};
+          showGoodbye(data.params || data);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, state: 'goodbye', params: data.params || data }));
+        }
+        else if (req.url === '/status') {
+          // Get current status
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ 
+            success: true, 
+            userType: USER_TYPE,
+            currentState: currentState,
+            stateParams: stateParams,
+            availableStates: Object.keys(STATE_URLS)
+          }));
+        }
+        else {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Not found' }));
         }
@@ -248,8 +401,15 @@ function startHttpControlServer() {
 
   server.listen(HTTP_CONTROL_PORT, '127.0.0.1', () => {
     console.info(`HTTP control server listening on http://127.0.0.1:${HTTP_CONTROL_PORT}`);
-    console.info(`  POST /navigate - Navigate to URL: {"url": "https://example.com"}`);
-    console.info(`  POST /splash   - Return to splash screen`);
+    console.info('Available endpoints:');
+    console.info('  POST /state        - Set state: {"state": "carescape", "params": {"roomId": "123"}}');
+    console.info('  POST /screensaver  - Show screensaver');
+    console.info('  POST /carescape    - Show carescape: {"roomId": "123", "inviteId": "456"}');
+    console.info('  POST /in-session   - Show in-session view: {"roomId": "123"}');
+    console.info('  POST /goodbye      - Show goodbye screen');
+    console.info('  POST /status       - Get current state');
+    console.info('  POST /navigate     - (Legacy) Navigate to URL: {"url": "https://example.com"}');
+    console.info('  POST /splash       - (Legacy) Return to splash screen');
   });
 
   server.on('error', (err) => {
@@ -258,8 +418,20 @@ function startHttpControlServer() {
 }
 
 // App lifecycle
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
+  
+  // Configure auto-start on system boot
+  if (AUTO_START) {
+    try {
+      await autostart.enable();
+      console.info('Auto-start enabled');
+    } catch (error) {
+      console.error('Failed to enable auto-start:', error.message);
+    }
+  } else {
+    console.info('Auto-start disabled by configuration');
+  }
   
   // Start control interfaces
   startHttpControlServer();
