@@ -22,6 +22,7 @@ const FULLSCREEN = process.env.FULLSCREEN === 'true';
 const USER_TYPE = (process.env.USER_TYPE || 'ledcarewall').toLowerCase();
 const AUTO_START = process.env.AUTO_START !== 'false'; // Default: true
 
+<<<<<<< HEAD
 // State URLs from environment - configured based on user type
 const STATE_URLS = USER_TYPE === 'provider' ? {
   // Provider workstation - 2 states only
@@ -29,18 +30,25 @@ const STATE_URLS = USER_TYPE === 'provider' ? {
   inSession: process.env.PROVIDER_IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/extensionproviderview',
 } : {
   // LED CareWall Display - 4 states
+=======
+// State URLs from environment
+const STATE_URLS = {
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
   screensaver: process.env.SCREENSAVER_URL || 'splash',
   carescape: process.env.CARESCAPE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/care',
   inSession: process.env.IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/ledwallview/ma',
   goodbye: process.env.GOODBYE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/endAppt',
 };
 
+<<<<<<< HEAD
 // States that use exact URLs (no params appended)
 const EXACT_URL_STATES = {
   'provider': ['screensaver'],  // Provider screensaver is exact
   'ledcarewall': ['screensaver'] // LED screensaver is exact (splash or URL)
 };
 
+=======
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
 // Current state tracking
 let currentState = 'screensaver';
 let stateParams = {}; // For storing roomId, inviteId, inviteToken, etc.
@@ -115,13 +123,19 @@ function setState(state, params = {}) {
 
   const stateUrl = STATE_URLS[state];
 
+<<<<<<< HEAD
   // Handle local splash screen (only if explicitly set to 'splash')
   if (stateUrl === 'splash') {
     console.info('Loading local splash screen');
+=======
+  // Handle screensaver/splash state
+  if (state === 'screensaver' || stateUrl === 'splash') {
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
     showSplash();
     return;
   }
 
+<<<<<<< HEAD
   // Check if this state uses exact URL (no params)
   const exactUrlStates = EXACT_URL_STATES[USER_TYPE] || [];
   const useExactUrl = exactUrlStates.includes(state);
@@ -131,6 +145,10 @@ function setState(state, params = {}) {
   
   console.info(`Loading URL: ${url}${useExactUrl ? ' (exact URL, no params)' : ' (with params)'}`);
   
+=======
+  // Build URL with parameters
+  const url = buildUrlWithParams(stateUrl, params);
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
   enterDestination(url);
 }
 

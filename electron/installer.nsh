@@ -92,18 +92,27 @@ FunctionEnd
   FileWrite $0 "USER_TYPE=$UserType$\r$\n"
   FileWrite $0 "$\r$\n"
   FileWrite $0 "# LED CareWall Display URLs$\r$\n"
+<<<<<<< HEAD
   FileWrite $0 "# State URLs - screensaver is exact URL (no params), others have params appended$\r$\n"
+=======
+  FileWrite $0 "LED_WALL_BASE_URL=https://fe-app.oneroomhealth.app/ledwallview$\r$\n"
+  FileWrite $0 "$\r$\n"
+  FileWrite $0 "# State URLs (use 'splash' for local splash screen)$\r$\n"
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
   FileWrite $0 "SCREENSAVER_URL=splash$\r$\n"
   FileWrite $0 "CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care$\r$\n"
   FileWrite $0 "IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma$\r$\n"
   FileWrite $0 "GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt$\r$\n"
   FileWrite $0 "$\r$\n"
+<<<<<<< HEAD
   FileWrite $0 "# Provider Workstation URLs (when USER_TYPE=provider)$\r$\n"
   FileWrite $0 "# Provider screensaver - exact URL (no params appended)$\r$\n"
   FileWrite $0 "PROVIDER_SCREENSAVER_URL=https://fe-app.oneroomhealth.app/wall/provider-display/screensaver$\r$\n"
   FileWrite $0 "# Provider in-session - params like roomId, inviteId will be appended$\r$\n"
   FileWrite $0 "PROVIDER_IN_SESSION_URL=https://fe-app.oneroomhealth.app/extensionproviderview$\r$\n"
   FileWrite $0 "$\r$\n"
+=======
+>>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
   FileWrite $0 "# WebSocket and HTTP Control (optional)$\r$\n"
   FileWrite $0 "# WORKSTATION_WS_URL=ws://localhost:9000/ws$\r$\n"
   FileWrite $0 "# HTTP_CONTROL_PORT=8787$\r$\n"
