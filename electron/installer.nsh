@@ -10,49 +10,42 @@ Var UserTypeLabel
 Var UserTypeDropdown
 Var UserType
 
-; Custom page to configure user type
-Page custom UserTypePageCreate UserTypePageLeave
+; NOTE: Electron Builder doesn't allow adding new Page directives easily from include scripts.
+; To ensure the selection UI always appears, we show an nsDialogs prompt from customInstall.
 
-Function UserTypePageCreate
+Function SelectUserType
   nsDialogs::Create 1018
   Pop $UserTypeDialog
 
   ${If} $UserTypeDialog == error
-    Abort
+    ; Fallback default if dialog fails
+    StrCpy $UserType "ledcarewall"
+    Return
   ${EndIf}
 
-  ; Title and description
   ${NSD_CreateLabel} 0 0 100% 24u "OneRoom Health Kiosk Configuration"
   Pop $0
-  
+
   ${NSD_CreateLabel} 0 28u 100% 24u "Please select the installation type for this device:"
   Pop $0
 
-  ; User type selection
   ${NSD_CreateLabel} 0 56u 100% 12u "Installation Type:"
   Pop $UserTypeLabel
 
   ${NSD_CreateDropList} 0 72u 200u 80u ""
   Pop $UserTypeDropdown
-  
-  ; Add options to dropdown
+
   ${NSD_CB_AddString} $UserTypeDropdown "LED CareWall Display"
   ${NSD_CB_AddString} $UserTypeDropdown "Provider Workstation"
-  
-  ; Set default selection
   ${NSD_CB_SelectString} $UserTypeDropdown "LED CareWall Display"
-  
-  ; Additional description
-  ${NSD_CreateLabel} 0 100u 100% 48u "LED CareWall Display: Use for waiting room displays showing patient information.$\r$\n$\r$\nProvider Workstation: Use for healthcare provider computers."
+
+  ${NSD_CreateLabel} 0 100u 100% 48u "LED CareWall Display: Waiting room display with 4 states.\r\n\r\nProvider Workstation: Provider computer with 2 states."
   Pop $0
 
   nsDialogs::Show
-FunctionEnd
 
-Function UserTypePageLeave
-  ; Get selected value
+  ; Read selection
   ${NSD_GetText} $UserTypeDropdown $0
-  
   ${If} $0 == "LED CareWall Display"
     StrCpy $UserType "ledcarewall"
   ${ElseIf} $0 == "Provider Workstation"
@@ -60,14 +53,16 @@ Function UserTypePageLeave
   ${Else}
     StrCpy $UserType "ledcarewall"
   ${EndIf}
-  
+
   DetailPrint "Selected installation type: $UserType"
 FunctionEnd
 
 !macro customInstall
+  ; Prompt for user type before writing configuration
+  Call SelectUserType
+
   ; Create .env file with user configuration
   DetailPrint "Creating configuration file with USER_TYPE=$UserType"
-  
   FileOpen $0 "$INSTDIR\.env" w
   FileWrite $0 "# OneRoom Health Kiosk - Environment Configuration$\r$\n"
   FileWrite $0 "$\r$\n"
@@ -109,22 +104,20 @@ FunctionEnd
   FileWrite $0 "# HTTP_CONTROL_PORT=8787$\r$\n"
   FileWrite $0 "# FULLSCREEN=true$\r$\n"
   FileClose $0
-  
+
   ; Add registry entry for auto-start with proper quoting
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ORHKiosk" '"$INSTDIR\OneRoom Health Kiosk.exe"'
-  
+
   ; Register Application User Model ID (AUMID) for Windows Kiosk Mode
-  ; This makes the app visible in Windows Settings > Accounts > Other users > Assigned access
   WriteRegStr SHCTX "Software\Classes\AppUserModelId\com.oneroomhealth.kiosk" "DisplayName" "OneRoom Health Kiosk"
   WriteRegStr SHCTX "Software\Classes\AppUserModelId\com.oneroomhealth.kiosk" "IconUri" "$INSTDIR\OneRoom Health Kiosk.exe,0"
   WriteRegDWORD SHCTX "Software\Classes\AppUserModelId\com.oneroomhealth.kiosk" "IsKioskApp" 1
-  
+
   ; Create Start Menu shortcut with AUMID
   CreateDirectory "$SMPROGRAMS\OneRoom Health Kiosk"
   CreateShortCut "$SMPROGRAMS\OneRoom Health Kiosk\OneRoom Health Kiosk.lnk" "$INSTDIR\OneRoom Health Kiosk.exe" "" "$INSTDIR\OneRoom Health Kiosk.exe" 0
-  
+
   ; Set the AUMID on the shortcut using a temporary VBScript
-  ; This is necessary for Windows to recognize the app in kiosk settings
   FileOpen $0 "$TEMP\set_aumid.vbs" w
   FileWrite $0 'Set oShell = CreateObject("Shell.Application")$\r$\n'
   FileWrite $0 'Set oFolder = oShell.NameSpace("$SMPROGRAMS\OneRoom Health Kiosk")$\r$\n'
@@ -133,10 +126,10 @@ FunctionEnd
   FileWrite $0 'oLink.SetAppUserModelID "com.oneroomhealth.kiosk"$\r$\n'
   FileWrite $0 'oLink.Save$\r$\n'
   FileClose $0
-  
+
   ExecWait 'wscript "$TEMP\set_aumid.vbs"'
   Delete "$TEMP\set_aumid.vbs"
-  
+
   ; Also set AUMID on desktop shortcut if it was created
   ${If} ${FileExists} "$DESKTOP\OneRoom Health Kiosk.lnk"
     FileOpen $0 "$TEMP\set_aumid_desktop.vbs" w
@@ -147,7 +140,7 @@ FunctionEnd
     FileWrite $0 'oLink.SetAppUserModelID "com.oneroomhealth.kiosk"$\r$\n'
     FileWrite $0 'oLink.Save$\r$\n'
     FileClose $0
-    
+
     ExecWait 'wscript "$TEMP\set_aumid_desktop.vbs"'
     Delete "$TEMP\set_aumid_desktop.vbs"
   ${EndIf}
@@ -156,10 +149,10 @@ FunctionEnd
 !macro customUnInstall  
   ; Remove registry entry on uninstall
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ORHKiosk"
-  
+
   ; Remove AUMID registration
   DeleteRegKey SHCTX "Software\Classes\AppUserModelId\com.oneroomhealth.kiosk"
-  
+
   ; Remove Start Menu folder
   RMDir /r "$SMPROGRAMS\OneRoom Health Kiosk"
 !macroend
