@@ -3,23 +3,14 @@
 ## [1.0.9] - 2025-10-16
 
 ### Added
-<<<<<<< HEAD
 - **State Management System**: User-type-specific states
   - **LED CareWall Display** (4 states): Screensaver, Carescape, In-Session, Goodbye
   - **Provider Workstation** (2 states): Screensaver, In-Session
-=======
-- **State Management System**: Four pre-configured states for LED CareWall displays
-  - Screensaver/Idle: Static splash screen
-  - Carescape: Pre-session room display
-  - In-Session: Active appointment display  
-  - Goodbye: Post-appointment thank you screen
->>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
   
 - **User Type Configuration**: 
   - Provider workstation mode
   - LED CareWall display mode
   - Configured during installation via custom NSIS dialog
-<<<<<<< HEAD
   - Automatically selects appropriate URLs based on user type
 
 - **Smart URL Handling**:
@@ -27,8 +18,6 @@
   - Other state URLs have parameters automatically appended (roomId, inviteId, inviteToken)
   - Provider URLs: `PROVIDER_SCREENSAVER_URL`, `PROVIDER_IN_SESSION_URL`
   - LED CareWall URLs: `SCREENSAVER_URL`, `CARESCAPE_URL`, `IN_SESSION_URL`, `GOODBYE_URL`
-=======
->>>>>>> bfda533d2f51f8fd631391c23e8c642a4cc77f7a
 
 - **Programmatic Auto-Start Control**:
   - Configurable via `AUTO_START` environment variable (default: true)
