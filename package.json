@@ -1,6 +1,6 @@
 {
   "name": "orh-electron-kiosk",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "OneRoom Health Electron Display Application",
   "main": "electron/main-states.js",
   "scripts": {
