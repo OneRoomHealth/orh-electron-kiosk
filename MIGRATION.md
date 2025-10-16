@@ -1,196 +1,372 @@
-# Migration Guide: Kiosk v1.0.8 → Flexible Display v1.0.9
+# Migration Guide: v1.0.8 → v1.0.9 (State Management)
 
 ## Overview
 
-This document outlines the changes made to convert the hardened kiosk application into a flexible display system with remote control capabilities.
+Version 1.0.9 transforms the kiosk application into a state-managed display system optimized for LED CareWall displays and provider workstations.
+
+## What's New in v1.0.9
+
+### State Management System
+Four pre-configured states for clinical workflows:
+- **Screensaver**: Idle display with background image
+- **Carescape**: Pre-session room display
+- **In-Session**: Active appointment display
+- **Goodbye**: Post-appointment thank you screen
+
+### User Type Configuration
+- **LED CareWall Display**: For waiting room displays
+- **Provider Workstation**: For healthcare provider computers
+- Selected during installation, stored in `.env` file
+
+### Enhanced Control APIs
+- State-based HTTP endpoints with parameter support
+- WebSocket state transitions
+- Status inspection endpoint
+- Backwards compatible with v1.0.8 commands
+
+### Bug Fixes
+- BrowserView alignment corrected (getContentBounds vs getBounds)
 
 ## Key Changes
 
-### 1. Architecture Shift
+### Architecture
 
 **Before (v1.0.8):**
-- Single BrowserWindow in kiosk mode
-- Hardcoded URL (KIOSK_URL)
-- Heavy security restrictions
-- PIN/gesture exit mechanisms
+```
+Single BrowserWindow → Hardcoded URL → Kiosk restrictions
+```
 
 **After (v1.0.9):**
-- BrowserWindow with BrowserView pattern
-- State-based navigation (splash ↔ destinations)
-- No security restrictions
-- Remote control via WebSocket/HTTP
+```
+BrowserWindow + State Manager → Dynamic URLs → Flexible control
+    ↓
+4 States: screensaver → carescape → inSession → goodbye
+    ↓
+Parameters: roomId, inviteId, inviteToken
+```
 
-### 2. New Files Created
-
-- `electron/main-states.js` - New main entry point with state management
-- `electron/renderer/splash.html` - Static splash screen
-- `electron/renderer/assets/background.png` - Default background image
-- `.env.example` - Environment variable template
-- `MIGRATION.md` - This file
-
-### 3. Modified Files
-
-- `package.json` - Updated main entry, added `ws` dependency, bumped version to 1.0.9
-- `electron/preload.js` - Removed kiosk-specific APIs
-- `electron-builder.yml` - Simplified file inclusion
-- `README.md` - Complete rewrite with new usage instructions
-
-### 4. Deprecated Files (Still Present)
-
-- `electron/main-kiosk.js` - Legacy kiosk mode (no longer used)
-- `electron/main.js` - Legacy dev mode (no longer used)
-
-### 5. Environment Variables
+### Environment Variables
 
 **Removed:**
 - `KIOSK_URL` - No longer used
-- `PROD_URL` - No longer used
 
-**New:**
-- `WORKSTATION_WS_URL` - WebSocket server URL (optional)
-- `HTTP_CONTROL_PORT` - Local HTTP API port (default: 8787)
-- `FULLSCREEN` - Start in fullscreen mode (default: false)
-
-### 6. Removed Features
-
-All kiosk security features have been removed:
-
-- ❌ Kiosk mode (`kiosk: true`)
-- ❌ Always on top
-- ❌ Frameless window
-- ❌ Global shortcut blocking (Alt+F4, F11, etc.)
-- ❌ Context menu blocking
-- ❌ Touch gesture protection
-- ❌ Edge swipe prevention
-- ❌ Domain allowlists
-- ❌ Navigation restrictions
-- ❌ Focus retention loops
-- ❌ 5-tap corner exit
-- ❌ PIN protection
-- ❌ Close/minimize prevention
-
-### 7. New Features
-
-#### State Management
-- `showSplash()` - Display static background image
-- `enterDestination(url)` - Navigate to any URL in BrowserView
-
-#### Remote Control Interfaces
-
-**HTTP API (127.0.0.1:8787):**
+**Added:**
 ```bash
-# Navigate
-curl -X POST http://127.0.0.1:8787/navigate \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
-
-# Splash
-curl -X POST http://127.0.0.1:8787/splash
+USER_TYPE=ledcarewall              # or 'provider'
+SCREENSAVER_URL=splash
+CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care
+IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma
+GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt
 ```
 
-**WebSocket Client:**
-```json
-// Navigate
-{"type": "navigate", "url": "https://example.com"}
+### API Endpoints
 
-// Splash
+**New in v1.0.9:**
+```bash
+POST /state         # Generic state transition
+POST /screensaver   # Show screensaver
+POST /carescape     # Show carescape with params
+POST /in-session    # Show in-session with params
+POST /goodbye       # Show goodbye screen
+POST /status        # Get current state info
+```
+
+**Still Supported (Legacy):**
+```bash
+POST /navigate      # Navigate to arbitrary URL
+POST /splash        # Return to splash
+```
+
+### WebSocket Messages
+
+**New in v1.0.9:**
+```json
+{"type": "state", "state": "carescape", "params": {"roomId": "123"}}
+{"type": "screensaver"}
+{"type": "carescape", "params": {...}}
+{"type": "inSession", "params": {...}}
+{"type": "goodbye"}
+```
+
+**Still Supported (Legacy):**
+```json
+{"type": "navigate", "url": "https://..."}
 {"type": "splash"}
 ```
 
 ## Migration Steps
 
-### For Development
+### For Development Environments
 
 1. **Update dependencies:**
    ```bash
+   git pull
    npm install
    ```
 
-2. **Create `.env` file** (optional):
+2. **Update `.env` file:**
    ```bash
-   cp .env.example .env
-   # Edit .env as needed
+   # Add new variables
+   USER_TYPE=ledcarewall
+   SCREENSAVER_URL=splash
+   CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care
+   IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma
+   GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt
+   
+   # Remove old variable
+   # KIOSK_URL=... (no longer needed)
    ```
 
-3. **Test the application:**
+3. **Test state transitions:**
    ```bash
    npm start
+   
+   # In another terminal
+   pwsh test-state-api.ps1
    ```
 
-4. **Test HTTP control:**
+4. **Update control scripts:**
+   
+   **Old way (still works):**
    ```bash
-   curl -X POST http://127.0.0.1:8787/navigate \
-     -H "Content-Type: application/json" \
+   curl -X POST http://localhost:8787/navigate \
      -d '{"url":"https://example.com"}'
    ```
-
-### For Production Deployment
-
-1. **Remove Windows Assigned Access** (if configured):
-   - Settings → Accounts → Other users
-   - Find kiosk user → "Remove kiosk"
-
-2. **Rebuild the application:**
+   
+   **New way (recommended):**
    ```bash
-   npm run build:win  # or build:mac, build:linux
+   curl -X POST http://localhost:8787/carescape \
+     -d '{"roomId":"room-123","inviteId":"invite-456"}'
    ```
 
-3. **Uninstall old version** (if installed)
+### For Production Deployments
 
-4. **Install new version** from `release/` directory
+1. **Backup current installation** (if needed for rollback)
 
-5. **Configure remote control** (if needed):
-   - Set environment variables in system or via launcher script
-   - Or use HTTP API from local processes
+2. **Uninstall old version:**
+   - Windows: Settings → Apps → OneRoom Health Kiosk → Uninstall
+   - Or use Control Panel
 
-### For Auto-Start
+3. **Install new version:**
+   ```bash
+   # Build new installer
+   npm run build:win
+   
+   # Run installer from release/ directory
+   # Select appropriate user type during installation
+   ```
 
-The app no longer forces auto-start. To configure:
+4. **Configure environment** (if using custom URLs):
+   - Edit `.env` file in installation directory
+   - Typically: `C:\Program Files\OneRoom Health Kiosk\.env`
 
-**Windows:**
-- Create shortcut in: `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+5. **Test state transitions:**
+   ```powershell
+   # Check status
+   Invoke-RestMethod -Uri "http://localhost:8787/status" -Method POST
+   
+   # Test state changes
+   pwsh test-state-api.ps1
+   ```
 
-**macOS:**
-- System Preferences → Users & Groups → Login Items
+### For Control Systems
 
-**Linux:**
-- Add to systemd user service or XDG autostart
+If you have external systems controlling the kiosk:
+
+**Option 1: Update to State-Based Control (Recommended)**
+
+```javascript
+// Old way
+await fetch('http://localhost:8787/navigate', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({url: 'https://...'})
+});
+
+// New way
+await fetch('http://localhost:8787/carescape', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    roomId: 'room-123',
+    inviteId: 'invite-456'
+  })
+});
+```
+
+**Option 2: Keep Legacy Commands (No Changes Required)**
+
+Legacy `/navigate` and `/splash` endpoints continue to work.
+
+### WebSocket Control Migration
+
+**Old messages (still work):**
+```json
+{"type": "navigate", "url": "https://example.com"}
+{"type": "splash"}
+```
+
+**New messages (recommended):**
+```json
+// Set state with parameters
+{
+  "type": "carescape",
+  "params": {
+    "roomId": "room-123",
+    "inviteId": "invite-456"
+  }
+}
+
+// Or use generic state command
+{
+  "type": "state",
+  "state": "inSession",
+  "params": {
+    "roomId": "room-123",
+    "inviteId": "invite-456",
+    "inviteToken": "token-xyz"
+  }
+}
+```
 
 ## Testing Checklist
 
-- [ ] App starts and shows background image
-- [ ] HTTP `/navigate` endpoint works
-- [ ] HTTP `/splash` endpoint works
-- [ ] WebSocket connection establishes (if configured)
-- [ ] WebSocket navigation commands work
-- [ ] Window can be resized/minimized/closed normally
-- [ ] Right-click context menus work
-- [ ] DevTools accessible (F12)
-- [ ] Background image displays correctly
-- [ ] BrowserView fills window properly
-- [ ] Multiple navigation commands work sequentially
+After migration, verify:
+
+- [ ] App starts and shows screensaver
+- [ ] `/status` endpoint returns current state
+- [ ] State transitions work:
+  - [ ] screensaver → carescape
+  - [ ] carescape → in-session
+  - [ ] in-session → goodbye
+  - [ ] goodbye → screensaver
+- [ ] Parameters appear in URLs (check browser address bar)
+- [ ] WebSocket commands work (if configured)
+- [ ] Legacy `/navigate` and `/splash` still work
+- [ ] Window resizes correctly (BrowserView aligned)
+- [ ] User type is correct (check `/status` response)
 
 ## Rollback Plan
 
-If you need to revert to kiosk mode:
+If you need to revert to v1.0.8:
 
-1. **Checkout v1.0.8:**
-   ```bash
-   git checkout v1.0.8
-   ```
+### Option 1: Reinstall Previous Version
+1. Uninstall v1.0.9
+2. Install v1.0.8 from archived installer
+3. Restore previous `.env` configuration
 
-2. **Reinstall dependencies:**
-   ```bash
-   npm install
-   ```
+### Option 2: Git Checkout
+```bash
+git checkout v1.0.8
+npm install
+npm run build:win
+```
 
-3. **Rebuild:**
-   ```bash
-   npm run build:win
-   ```
+## Configuration Examples
 
-Or install from previous release artifacts.
+### LED CareWall Display (Default)
+```bash
+USER_TYPE=ledcarewall
+SCREENSAVER_URL=splash
+CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care
+IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma
+GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt
+HTTP_CONTROL_PORT=8787
+```
+
+### Provider Workstation
+```bash
+USER_TYPE=provider
+SCREENSAVER_URL=splash
+CARESCAPE_URL=https://fe-app.oneroomhealth.app/ledwallview/care
+IN_SESSION_URL=https://fe-app.oneroomhealth.app/ledwallview/ma
+GOODBYE_URL=https://fe-app.oneroomhealth.app/ledwallview/endAppt
+HTTP_CONTROL_PORT=8787
+```
+
+### Custom URLs
+```bash
+USER_TYPE=ledcarewall
+SCREENSAVER_URL=https://custom-domain.com/screensaver
+CARESCAPE_URL=https://custom-domain.com/carescape
+IN_SESSION_URL=https://custom-domain.com/session
+GOODBYE_URL=https://custom-domain.com/goodbye
+```
+
+## Troubleshooting
+
+### State not changing
+```bash
+# Check current state
+curl -X POST http://localhost:8787/status
+
+# Verify URL configuration in .env
+cat .env
+
+# Check console logs for errors
+npm start
+```
+
+### Parameters not appearing in URL
+- Verify JSON syntax in request body
+- Use correct parameter names: `roomId`, `inviteId`, `inviteToken`
+- Check `/status` endpoint to see current `stateParams`
+
+### BrowserView misaligned
+- This bug was fixed in v1.0.9
+- If issue persists, verify you're running v1.0.9:
+  ```bash
+  curl -X POST http://localhost:8787/status
+  # Should show version in logs
+  ```
+
+### Installation wizard doesn't show user type selection
+- Verify you're using v1.0.9 installer
+- Check installer logs in temp directory
+- Manually edit `.env` file after installation if needed
+
+## Breaking Changes
+
+### None for Basic Usage
+All legacy commands still work, so existing integrations continue functioning.
+
+### For Advanced Integrations
+If you were directly manipulating the kiosk URL:
+- Use state-based commands instead
+- Or continue using `/navigate` with full URLs
+
+## Benefits of Upgrading
+
+1. **Cleaner Control**: State names instead of full URLs
+2. **Parameter Handling**: Built-in query parameter support
+3. **Status Inspection**: Know current state at any time
+4. **Bug Fixes**: BrowserView alignment corrected
+5. **Better Organization**: User type configuration
+6. **Future-Proof**: Extensible state system
 
 ## Support
 
-For questions or issues with the migration, contact the OneRoom Health IT team.
+- **Documentation**: See [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md)
+- **Quick Start**: See [QUICKSTART.md](./QUICKSTART.md)
+- **API Reference**: See [README.md](./README.md)
+- **Version History**: See [CHANGELOG.md](./CHANGELOG.md)
+- **Issues**: Contact OneRoom Health IT team
+
+## Version Comparison
+
+| Feature | v1.0.8 | v1.0.9 |
+|---------|--------|--------|
+| State Management | ❌ | ✅ 4 states |
+| User Types | ❌ | ✅ Provider/LEDCareWall |
+| Parameter Passing | ❌ | ✅ roomId, inviteId, etc |
+| Status Endpoint | ❌ | ✅ `/status` |
+| BrowserView Alignment | ⚠️ Bug | ✅ Fixed |
+| HTTP API | ✅ Basic | ✅ Enhanced |
+| WebSocket | ✅ Basic | ✅ Enhanced |
+| Legacy Support | N/A | ✅ Backwards compatible |
+
+---
+
+**Migration Date**: October 16, 2025  
+**Target Version**: 1.0.9  
+**Previous Version**: 1.0.8
