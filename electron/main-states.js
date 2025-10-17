@@ -542,14 +542,13 @@ function startHttpControlServer() {
   server.listen(HTTP_CONTROL_PORT, '127.0.0.1', () => {
     console.info(`HTTP control server listening on http://127.0.0.1:${HTTP_CONTROL_PORT}`);
     console.info('Available endpoints:');
+    console.info('  POST /navigate     - Display any URL: {"url": "https://example.com/path?params=values"} [RECOMMENDED]');
+    console.info('  POST /screensaver  - Return to screensaver/idle state');
+    console.info('  POST /status       - Get current state and configuration');
     console.info('  POST /state        - Set state: {"state": "carescape", "params": {"roomId": "123"}}');
-    console.info('  POST /screensaver  - Show screensaver');
     console.info('  POST /carescape    - Show carescape: {"roomId": "123", "inviteId": "456"}');
     console.info('  POST /in-session   - Show in-session view: {"roomId": "123"}');
     console.info('  POST /goodbye      - Show goodbye screen');
-    console.info('  POST /status       - Get current state');
-    console.info('  POST /navigate     - (Legacy) Navigate to URL: {"url": "https://example.com"}');
-    console.info('  POST /splash       - (Legacy) Return to splash screen');
   });
 
   server.on('error', (err) => {
