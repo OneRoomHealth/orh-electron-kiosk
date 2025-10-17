@@ -27,11 +27,11 @@ const AUTO_START = process.env.AUTO_START !== 'false'; // Default: true
 // State URLs from environment - configured based on user type
 const STATE_URLS = USER_TYPE === 'provider' ? {
   // Provider workstation - 2 states only
-  screensaver: process.env.PROVIDER_SCREENSAVER_URL || 'https://fe-app.oneroomhealth.app/wall/default',
-  inSession: process.env.PROVIDER_IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/extensionproviderview',
+  screensaver: process.env.PROVIDER_SCREENSAVER_URL || 'https://orh-frontend-dev-container.politebeach-927fe169.westus2.azurecontainerapps.io/wall/default',
+  inSession: process.env.PROVIDER_IN_SESSION_URL || 'https://orh-frontend-dev-container.politebeach-927fe169.westus2.azurecontainerapps.io/extensionproviderview',
 } : {
   // LED CareWall Display - 4 states
-  screensaver: process.env.SCREENSAVER_URL || 'https://fe-app.oneroomhealth.app/wall/default',
+  screensaver: process.env.SCREENSAVER_URL || 'https://orh-frontend-dev-container.politebeach-927fe169.westus2.azurecontainerapps.io/wall/default',
   carescape: process.env.CARESCAPE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/care',
   inSession: process.env.IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/ledwallview/ma',
   goodbye: process.env.GOODBYE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/endAppt',
@@ -340,8 +340,8 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Load splash on startup
-  showSplash();
+  // Load screensaver on startup (default state)
+  showScreensaver();
 
   // Handle window resize to update BrowserView bounds
   mainWindow.on('resize', () => {
