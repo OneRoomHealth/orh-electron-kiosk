@@ -1,7 +1,8 @@
-const { app, BrowserWindow, BrowserView } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const path = require('path');
 const http = require('http');
 const autostart = require('./autostart');
+const fs = require('fs');
 require('dotenv').config();
 
 // Set Application User Model ID for Windows
@@ -18,18 +19,19 @@ let reconnectDelay = 1000; // Start with 1 second
 // Configuration from environment
 const WORKSTATION_WS_URL = process.env.WORKSTATION_WS_URL;
 const HTTP_CONTROL_PORT = parseInt(process.env.HTTP_CONTROL_PORT || '8787', 10);
-const FULLSCREEN = process.env.FULLSCREEN === 'true';
+// Default to fullscreen unless explicitly disabled via FULLSCREEN=false
+const FULLSCREEN = process.env.FULLSCREEN !== 'false';
 const USER_TYPE = (process.env.USER_TYPE || 'ledcarewall').toLowerCase();
 const AUTO_START = process.env.AUTO_START !== 'false'; // Default: true
 
 // State URLs from environment - configured based on user type
 const STATE_URLS = USER_TYPE === 'provider' ? {
   // Provider workstation - 2 states only
-  screensaver: process.env.PROVIDER_SCREENSAVER_URL || 'https://fe-app.oneroomhealth.app/wall/provider-display/screensaver',
+  screensaver: process.env.PROVIDER_SCREENSAVER_URL || 'https://fe-app.oneroomhealth.app/wall/default',
   inSession: process.env.PROVIDER_IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/extensionproviderview',
 } : {
   // LED CareWall Display - 4 states
-  screensaver: process.env.SCREENSAVER_URL || 'splash',
+  screensaver: process.env.SCREENSAVER_URL || 'https://fe-app.oneroomhealth.app/wall/default',
   carescape: process.env.CARESCAPE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/care',
   inSession: process.env.IN_SESSION_URL || 'https://fe-app.oneroomhealth.app/ledwallview/ma',
   goodbye: process.env.GOODBYE_URL || 'https://fe-app.oneroomhealth.app/ledwallview/endAppt',
@@ -48,6 +50,120 @@ let stateParams = {}; // For storing roomId, inviteId, inviteToken, etc.
 console.log('OneRoom Health Kiosk - State Management');
 console.log('User Type:', USER_TYPE);
 console.log('Available States:', Object.keys(STATE_URLS));
+
+/**
+ * Resolve path to .env file depending on run mode
+ */
+function getEnvFilePath() {
+  try {
+    const isDev = process.env.NODE_ENV === 'development' || process.defaultApp;
+    if (isDev) {
+      // project root: one level up from electron/
+      return path.join(__dirname, '..', '.env');
+    }
+    // installed path next to executable
+    const installDir = path.dirname(app.getPath('exe'));
+    return path.join(installDir, '.env');
+  } catch (e) {
+    // fallback to project root
+    return path.join(__dirname, '..', '.env');
+  }
+}
+
+/**
+ * Write minimal .env with selected user type
+ */
+function writeEnvFile(userType) {
+  const envPath = getEnvFilePath();
+  const lines = [];
+  lines.push('# OneRoom Health Kiosk - Generated on first run');
+  lines.push('NODE_ENV=production');
+  lines.push('KIOSK_MODE=true');
+  lines.push('AUTO_START=true');
+  lines.push(`USER_TYPE=${userType}`);
+  // Keep screensaver default configurable later by IT
+  // lines.push('SCREENSAVER_URL=splash');
+  const content = lines.join('\r\n') + '\r\n';
+  fs.writeFileSync(envPath, content, { encoding: 'utf8' });
+  console.info('Wrote configuration file:', envPath);
+}
+
+/**
+ * First-run configuration dialog when USER_TYPE is not set
+ */
+async function maybeRunFirstTimeSetup() {
+  const envPath = getEnvFilePath();
+  const hasEnv = fs.existsSync(envPath);
+  const userTypeSet = !!process.env.USER_TYPE && String(process.env.USER_TYPE).trim() !== '';
+  if (userTypeSet && hasEnv) {
+    return; // nothing to do
+  }
+
+  return new Promise((resolve) => {
+    const modal = new BrowserWindow({
+      width: 480,
+      height: 280,
+      resizable: false,
+      modal: true,
+      parent: null,
+      frame: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+      },
+    });
+
+    ipcMain.handleOnce('save-user-type', (_evt, selected) => {
+      try {
+        const value = (selected || 'ledcarewall').toLowerCase();
+        writeEnvFile(value);
+        // relaunch app to pick up new env
+        app.relaunch();
+        app.exit(0);
+      } catch (e) {
+        console.error('Failed to save user type:', e);
+        modal.close();
+        resolve();
+      }
+    });
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>OneRoom Health Kiosk - First Run</title>
+          <style>
+            body { font-family: sans-serif; margin: 20px; }
+            h1 { font-size: 18px; margin-bottom: 12px; }
+            label { display:block; margin: 8px 0 4px; }
+            select, button { font-size: 14px; padding: 6px; }
+            .row { margin-top: 16px; }
+          </style>
+        </head>
+        <body>
+          <h1>Choose installation type</h1>
+          <p>This device can be configured as a LED CareWall display or a Provider workstation.</p>
+          <label for="ut">Installation Type</label>
+          <select id="ut">
+            <option value="ledcarewall" selected>LED CareWall Display</option>
+            <option value="provider">Provider Workstation</option>
+          </select>
+          <div class="row">
+            <button id="save">Save & Restart</button>
+          </div>
+          <script>
+            const { ipcRenderer } = require('electron');
+            document.getElementById('save').addEventListener('click', () => {
+              const v = document.getElementById('ut').value;
+              ipcRenderer.invoke('save-user-type', v);
+            });
+          </script>
+        </body>
+      </html>`;
+    modal.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  });
+}
 
 /**
  * Show the static splash background image
@@ -198,7 +314,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     kiosk: false,
     alwaysOnTop: false,
-    frame: true,
+    frame: false, // borderless window
     fullscreen: FULLSCREEN,
     show: false,
     webPreferences: {
@@ -209,9 +325,14 @@ function createWindow() {
     },
   });
 
-  // Maximize if not fullscreen
-  if (!FULLSCREEN) {
+  // Ensure fullscreen and hide menu if configured
+  if (FULLSCREEN) {
+    mainWindow.setMenuBarVisibility(false);
+    mainWindow.setFullScreen(true);
+  } else {
+    // Maximize when not in fullscreen
     mainWindow.maximize();
+    mainWindow.setMenuBarVisibility(false);
   }
 
   // Show window when ready
@@ -439,6 +560,12 @@ function startHttpControlServer() {
 // App lifecycle
 app.whenReady().then(async () => {
   createWindow();
+  // First-run setup if USER_TYPE not present
+  try {
+    await maybeRunFirstTimeSetup();
+  } catch (e) {
+    console.error('First-run setup error:', e);
+  }
   
   // Configure auto-start on system boot
   if (AUTO_START) {
